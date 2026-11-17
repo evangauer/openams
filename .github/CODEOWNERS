@@ -1,0 +1,18 @@
+# Reviews for changes that affect what runs in production or how it is deployed.
+# Production deploys from main, so these paths are security-sensitive.
+# Later rules override earlier ones, so the default owner comes first.
+
+*                         @evangauer
+
+/apphosting.yaml          @evangauer @jvroth18
+/firebase.json            @evangauer @jvroth18
+/firestore.rules          @evangauer @jvroth18
+/storage.rules            @evangauer @jvroth18
+/scripts/                 @evangauer @jvroth18
+/.github/                 @evangauer @jvroth18
+/apps/api/src/firebase/   @evangauer @jvroth18
+/apps/api/src/firebase-server.ts @evangauer @jvroth18
+/apps/web/src/proxy.ts    @evangauer @jvroth18
+/apps/web/next.config.ts  @evangauer @jvroth18
+/package.json             @evangauer @jvroth18
+/package-lock.json        @evangauer @jvroth18

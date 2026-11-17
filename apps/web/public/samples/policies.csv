@@ -1,0 +1,13 @@
+account_external_id,policy_number,line,carrier,effective_date,expiration_date,billing,premium,tax,fee,commission_rate
+acct-1001,POD-BOP-2026,Businessowners,Example Mutual (fictional),2026-01-01,2027-01-01,direct,3850,0,0,15
+acct-1001,POD-WC-2026,Workers compensation,Lakeview Casualty (fictional),2026-01-01,2027-01-01,direct,2140,0,0,10
+acct-1002,RRX-GL-2025,General liability,Northern Prairie Insurance (fictional),2025-12-15,2026-12-15,direct,18400,0,0,12.5
+acct-1002,RRX-AUTO-2025,Commercial auto,Example Mutual (fictional),2025-12-15,2026-12-15,direct,22600,0,0,10
+acct-1002,RRX-WC-2025,Workers compensation,Lakeview Casualty (fictional),2025-12-15,2026-12-15,direct,31750,0,0,8
+acct-1003,BSB-BOP-2026,Businessowners,Example Mutual (fictional),2026-03-01,2027-03-01,direct,2975,0,0,15
+acct-1004,HMF-FARM-2026,Farmowners,Northern Prairie Insurance (fictional),2026-02-01,2027-02-01,direct,9640,0,0,13
+acct-1005,LPT-PL-2026,Professional liability,Lakeview Casualty (fictional),2026-04-01,2027-04-01,direct,4310,0,0,12
+acct-1005,LPT-BOP-2026,Businessowners,Example Mutual (fictional),2026-04-01,2027-04-01,direct,3120,0,0,15
+acct-1006,IRF-GL-2025,General liability,Example Mutual (fictional),2025-12-01,2026-12-01,direct,11200,0,0,12.5
+acct-1006,IRF-PROP-2025,Commercial property,Northern Prairie Insurance (fictional),2025-12-01,2026-12-01,direct,14880,0,0,12.5
+acct-1008,NFL-GL-2026,General liability,Example Mutual (fictional),2026-01-20,2027-01-20,direct,6450,0,0,12.5

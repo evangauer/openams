@@ -1,0 +1,130 @@
+/*
+ * OpenAMS design tokens.
+ *
+ * Import this file once, before app styles. Light and dark values live together through
+ * light-dark(), so each token follows the page's color-scheme:
+ *   html { color-scheme: light; }        light only (the default here)
+ *   html { color-scheme: light dark; }   follow the visitor's system setting
+ *   <html data-theme="dark">             force a theme
+ *
+ * The semantic names (--color-bg, --color-ink, --color-accent…) match the names the
+ * OpenAMS web app already reads. Text pairs are checked for WCAG AA by
+ * brand/scripts/check-contrast.mjs; see brand/BRAND.md for the ratios.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Brand palette ---------------------------------------------------------------------- */
+  --oams-graphite: #16181d;
+  --oams-graphite-900: #1e2127;
+  --oams-graphite-800: #23262d;
+  --oams-graphite-700: #2a2d34;
+  --oams-graphite-600: #3a3e47;
+  --oams-slate: #5b6170;
+  --oams-ash: #9ba0aa;
+  --oams-stone: #e6e3dc;
+  --oams-bone: #f6f5f1;
+  --oams-white: #ffffff;
+
+  --oams-saffron: #f7cc2e; /* the light in the doorway: a true yellow */
+  --oams-saffron-deep: #ebbd17;
+  --oams-wheat: #f9d07a;
+  --oams-saffron-soft: #fdf4d2;
+  --oams-amber-ink: #6b5000;
+
+  --oams-clay: #a7553c; /* the glow on the floor; the link to Relay */
+  --oams-clay-light: #e0937c;
+  --oams-clay-soft: #fbf0ec;
+
+  --oams-denim: #2e5a88; /* links and information */
+  --oams-denim-light: #7fa8d9;
+  --oams-denim-soft: #e4ecf5;
+
+  /* Sundown: the palette of the pixel scenes, for illustration and night sections ----- */
+  --oams-night: #211832;
+  --oams-dusk: #432a5a;
+  --oams-plum: #813c6c;
+  --oams-rose: #cb5b62;
+  --oams-ember: #f19448;
+  --oams-mesa: #de8540;
+  --oams-canyon: #55271f;
+  --oams-sand: #f4be72;
+  --oams-saguaro: #2e5c4e;
+
+  /* Type ------------------------------------------------------------------------------- */
+  --font-body: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --tracking-display: -0.035em;
+  --tracking-heading: -0.02em;
+
+  /* Surfaces --------------------------------------------------------------------------- */
+  --color-bg: light-dark(var(--oams-bone), var(--oams-graphite));
+  --color-surface: light-dark(var(--oams-white), var(--oams-graphite-900));
+  --color-surface-subtle: light-dark(#efede7, var(--oams-graphite-800));
+  --color-surface-raised: light-dark(var(--oams-white), var(--oams-graphite-800));
+  --color-surface-inverse: light-dark(var(--oams-graphite), var(--oams-bone));
+
+  /* Text ------------------------------------------------------------------------------- */
+  --color-ink: light-dark(var(--oams-graphite), var(--oams-bone));
+  --color-ink-muted: light-dark(#3f434c, #c9cbd0);
+  --color-ink-subtle: light-dark(var(--oams-slate), var(--oams-ash));
+  --color-ink-inverse: light-dark(var(--oams-white), var(--oams-graphite));
+
+  /* Lines ------------------------------------------------------------------------------ */
+  --color-border: light-dark(var(--oams-stone), #2c3038);
+  --color-border-strong: light-dark(#cfcbc2, var(--oams-graphite-600));
+  --color-border-hairline: light-dark(#eeece6, var(--oams-graphite-800));
+
+  /* Brand accent: saffron fills carry graphite text, never white ----------------------- */
+  --color-accent: var(--oams-saffron);
+  --color-accent-hover: light-dark(var(--oams-saffron-deep), #f9d650);
+  --color-accent-soft: light-dark(var(--oams-saffron-soft), #3a2f16);
+  --color-accent-ink: light-dark(var(--oams-amber-ink), #f8d04a);
+  --color-on-accent: var(--oams-graphite);
+
+  /* Links, information and the Relay connection ---------------------------------------- */
+  --color-link: light-dark(var(--oams-denim), var(--oams-denim-light));
+  --color-link-hover: light-dark(#234a72, #a6c3e6);
+  --color-info: light-dark(var(--oams-denim), var(--oams-denim-light));
+  --color-info-soft: light-dark(var(--oams-denim-soft), #1c2a3a);
+  --color-clay: light-dark(var(--oams-clay), var(--oams-clay-light));
+  --color-clay-soft: light-dark(var(--oams-clay-soft), #3a2620);
+
+  /* Status: always pair with an icon or a word, never color alone ---------------------- */
+  --color-success: light-dark(#186e42, #5cc08a);
+  --color-success-soft: light-dark(#e3f1e7, #17301f);
+  --color-warning: light-dark(#8f5600, #f0b45c);
+  --color-warning-soft: light-dark(#fcefd6, #3a2c12);
+  --color-danger: light-dark(#b42318, #f08a7e);
+  --color-danger-soft: light-dark(#fbe9e7, #3a1e1b);
+
+  /* Night sections: the site hero and page headers stay dark in both themes ------------ */
+  --color-night: var(--oams-night);
+  --color-on-night: var(--oams-bone);
+  --color-on-night-muted: #d9cfe0;
+  --color-on-night-accent: var(--oams-wheat);
+
+  /* Shape and depth -------------------------------------------------------------------- */
+  --radius-card: 14px;
+  --radius-input: 8px;
+  --radius-chip: 999px;
+  --radius-mark: 23.4375%; /* the mark's corner: 15 on a 64 grid */
+  --shadow-card: 0 0 0 1px light-dark(rgb(22 24 29 / 0.06), rgb(255 255 255 / 0.06)),
+    0 1px 2px light-dark(rgb(22 24 29 / 0.05), rgb(0 0 0 / 0.3));
+  --shadow-raised: 0 0 0 1px light-dark(rgb(22 24 29 / 0.06), rgb(255 255 255 / 0.06)),
+    0 10px 28px -8px light-dark(rgb(22 24 29 / 0.16), rgb(0 0 0 / 0.5)),
+    0 3px 8px -3px light-dark(rgb(22 24 29 / 0.06), rgb(0 0 0 / 0.3));
+  --shadow-focus: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-link);
+
+  /* The doorway glow, for illustrations ------------------------------------------------ */
+  --gradient-glow: linear-gradient(180deg, rgb(167 85 60 / 0.75), rgb(167 85 60 / 0.12));
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+}

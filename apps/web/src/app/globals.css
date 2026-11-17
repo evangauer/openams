@@ -1,0 +1,169 @@
+/*
+ * Temporary theme. These token names are what the agency workspace reads; the brand
+ * foundation (brand/tokens.css) will replace the values, not the names.
+ */
+:root {
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: #f8faf7;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f1f5f1;
+  --color-surface-raised: #ffffff;
+
+  --color-ink: #17201d;
+  --color-ink-muted: #46524d;
+  --color-ink-subtle: #66706b;
+  --color-ink-inverse: #ffffff;
+
+  --color-border: #e1e6e1;
+  --color-border-strong: #c9d1ca;
+  --color-border-hairline: #ecf0ec;
+
+  --color-accent: #2f7a63;
+  --color-accent-hover: #245b4b;
+  --color-accent-soft: #eaf3ee;
+  --color-accent-ink: #1d4a3d;
+
+  --color-success: #1f7a55;
+  --color-warning: #a3670a;
+  --color-danger: #c2412f;
+
+  --radius-card: 14px;
+  --shadow-raised:
+    0 0 0 1px rgba(23, 32, 29, 0.06),
+    0 10px 28px -8px rgba(23, 32, 29, 0.16),
+    0 3px 8px -3px rgba(23, 32, 29, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(47, 122, 99, 0.28);
+}
+
+/* Minimal reset: the workspace styles assume margins and control chrome start at zero. */
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--color-border);
+}
+html {
+  color-scheme: light;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+}
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5, h6, p, blockquote, figure, dl, dd, pre, hr, fieldset {
+  margin: 0;
+}
+h1, h2, h3, h4 {
+  color: var(--color-ink);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 28px; line-height: 1.2; letter-spacing: -0.02em; }
+h2 { font-size: 20px; line-height: 1.3; }
+h3 { font-size: 16px; line-height: 1.35; }
+h4 { font-size: 14px; line-height: 1.4; }
+h5, h6 { font-size: inherit; font-weight: inherit; }
+a { color: inherit; text-decoration: inherit; }
+b, strong { font-weight: bolder; }
+table { text-indent: 0; border-color: inherit; border-collapse: collapse; }
+button, input, optgroup, select, textarea {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+button, [type="button"], [type="reset"], [type="submit"] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+button, [role="button"] { cursor: pointer; }
+fieldset, legend { padding: 0; }
+ol, ul, menu { list-style: none; margin: 0; padding: 0; }
+textarea { resize: vertical; }
+input::placeholder, textarea::placeholder { opacity: 1; color: var(--color-ink-subtle); }
+img, svg, video, canvas, audio, iframe, embed, object { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+[hidden]:where(:not([hidden="until-found"])) { display: none; }
+:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: 6px; }
+::selection { background: var(--color-accent-soft); color: var(--color-accent-ink); }
+
+/* Dialog primitives (components/ui/dialog.tsx). */
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--color-ink) 36%, transparent);
+  backdrop-filter: blur(2px);
+  animation: ui-fade-in 180ms ease-out;
+}
+.ui-dialog-content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 50;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 2rem);
+  max-width: 560px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised);
+  animation: ui-fade-in 180ms ease-out;
+}
+.ui-dialog-close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--color-ink-muted);
+}
+.ui-dialog-close:hover { background: var(--color-surface-subtle); color: var(--color-ink); }
+.ui-dialog-header { padding: 20px 20px 12px; }
+.ui-dialog-title { font-size: 18px; font-weight: 600; }
+.ui-dialog-description { margin-top: 4px; color: var(--color-ink-muted); font-size: 13.5px; }
+.ui-dialog-body { padding: 12px 20px; }
+.ui-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border-hairline);
+}
+
+.setup-notice {
+  max-width: 560px;
+  margin: 15vh auto 0;
+  padding: 0 24px;
+}
+.setup-notice p {
+  margin-top: 12px;
+  color: var(--color-ink-muted);
+}
+.setup-notice code {
+  font-size: 13px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--color-surface-subtle);
+}

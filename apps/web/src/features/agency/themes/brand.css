@@ -1,0 +1,854 @@
+/*
+ * OpenAMS take: the broker portal layout (portal.css) in OpenAMS colors. White cards sit
+ * on a warm canvas. Agencies choose a color scheme (Settings → Appearance); each scheme
+ * is one block of --s-* values below, and a single mapping turns those into the portal
+ * and workspace tokens. Every text pairing in every scheme meets WCAG AA (4.5:1).
+ *
+ * Scoped to html[data-theme="brand"]; loads after portal.css, so these values win at equal specificity.
+ */
+
+/* ================================================================ schemes */
+
+/* Saffron. Graphite and bone with a true yellow (47° hue; the kit's #F4B02A read orange). */
+html[data-theme="brand"] {
+  --s-ink: #16181d;
+  --s-ink-rgb: 22, 24, 29;
+  --s-ink2: #2a2d34;
+  --s-muted: #3f434c;
+  --s-subtle: #5b6170;
+  --s-canvas: #f3f1ec;
+  --s-band: #ebe8e1;
+  --s-line: #e6e3dc;
+  --s-line-strong: #d6d2c9;
+  --s-hairline: #eeece6;
+  --s-accent: #f7cc2e;
+  --s-accent-hover: #ebbd17;
+  --s-on-accent: #16181d;
+  --s-soft: #fdf4d2;
+  --s-soft-hover: #fbe9a8;
+  --s-accent-ink: #6b5000;
+  --s-link: #2e5a88;
+  --s-link-rgb: 46, 90, 136;
+  --s-positive: #1f8a55;
+  --s-success: #186e42;
+  --s-warn: #8f5600;
+  --s-warn-soft: #fcefd6;
+  --s-danger: #b42318;
+  --s-danger-soft: #fbe9e7;
+  --s-relay: #e0937c;
+  --s-on-dark: #f6f5f1;
+  --s-on-dark-muted: #c9cbd0;
+  --s-dark-line: #3a3e47;
+  --s-on-dark-accent: #f8d04a;
+  --s-promo-from: #2a2d34;
+  --s-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2316181d'/%3E%3Crect x='28.5' y='16' width='17' height='32' rx='1.5' fill='%23f7cc2e'/%3E%3Cpath d='M28.5 16 19.5 12.8V51.2L28.5 48Z' fill='%23f6f5f1' stroke='%23f6f5f1' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Desert dusk. After a desert sunset: dusk purple, sunset orange, the sun's gold, cactus teal */
+html[data-theme="brand"][data-scheme="dusk"] {
+  --s-ink: #2b1838;
+  --s-ink-rgb: 43, 24, 56;
+  --s-ink2: #452a57;
+  --s-muted: #5a4767;
+  --s-subtle: #6e5c79;
+  --s-canvas: #f6efe8;
+  --s-band: #ecdfd6;
+  --s-line: #e8d9ce;
+  --s-line-strong: #d9c4b5;
+  --s-hairline: #f0e4db;
+  --s-accent: #f0843a;
+  --s-accent-hover: #e06f26;
+  --s-on-accent: #2b1838;
+  --s-soft: #fde4cf;
+  --s-soft-hover: #fbd0ae;
+  --s-accent-ink: #8f3a0e;
+  --s-link: #6a3e9e;
+  --s-link-rgb: 106, 62, 158;
+  --s-positive: #2a8a76;
+  --s-success: #1e6b5b;
+  --s-warn: #93500f;
+  --s-warn-soft: #fbe6cc;
+  --s-danger: #b3342b;
+  --s-danger-soft: #fbe6e3;
+  --s-relay: #f2a08f;
+  --s-on-dark: #fbefe7;
+  --s-on-dark-muted: #dcc8d6;
+  --s-dark-line: #4d355e;
+  --s-on-dark-accent: #fdd581;
+  --s-promo-from: #5d3a82;
+  --s-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%232b1838'/%3E%3Crect x='28.5' y='16' width='17' height='32' rx='1.5' fill='%23fdc66b'/%3E%3Cpath d='M28.5 16 19.5 12.8V51.2L28.5 48Z' fill='%23fbefe7' stroke='%23fbefe7' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Prairie. Field green, linen and barn red */
+html[data-theme="brand"][data-scheme="prairie"] {
+  --s-ink: #1f2b23;
+  --s-ink-rgb: 31, 43, 35;
+  --s-ink2: #33433a;
+  --s-muted: #44524a;
+  --s-subtle: #5c6a61;
+  --s-canvas: #f2f0e6;
+  --s-band: #e6e2d2;
+  --s-line: #e0dccb;
+  --s-line-strong: #cfc9b3;
+  --s-hairline: #eae7da;
+  --s-accent: #b4442e;
+  --s-accent-hover: #9b3826;
+  --s-on-accent: #ffffff;
+  --s-soft: #f6e1da;
+  --s-soft-hover: #efcabd;
+  --s-accent-ink: #8e2f1d;
+  --s-link: #2f6a4a;
+  --s-link-rgb: 47, 106, 74;
+  --s-positive: #3d8a55;
+  --s-success: #2b6b40;
+  --s-warn: #8a5a06;
+  --s-warn-soft: #f7ead0;
+  --s-danger: #a3271c;
+  --s-danger-soft: #f8e4e1;
+  --s-relay: #e8b86a;
+  --s-on-dark: #f2f0e6;
+  --s-on-dark-muted: #c6cbbf;
+  --s-dark-line: #3b4a40;
+  --s-on-dark-accent: #f1c27a;
+  --s-promo-from: #3a4d3f;
+  --s-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%231f2b23'/%3E%3Crect x='28.5' y='16' width='17' height='32' rx='1.5' fill='%23e8b86a'/%3E%3Cpath d='M28.5 16 19.5 12.8V51.2L28.5 48Z' fill='%23f2f0e6' stroke='%23f2f0e6' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Lakeshore. Lake blue, deep navy and sand */
+html[data-theme="brand"][data-scheme="lakeshore"] {
+  --s-ink: #12263a;
+  --s-ink-rgb: 18, 38, 58;
+  --s-ink2: #213a52;
+  --s-muted: #3e5266;
+  --s-subtle: #56697c;
+  --s-canvas: #f3f2ee;
+  --s-band: #e6e5df;
+  --s-line: #e1e0d9;
+  --s-line-strong: #cdccc3;
+  --s-hairline: #ecebe5;
+  --s-accent: #2a6fb0;
+  --s-accent-hover: #225d95;
+  --s-on-accent: #ffffff;
+  --s-soft: #e2edf7;
+  --s-soft-hover: #cddff0;
+  --s-accent-ink: #1d5288;
+  --s-link: #1d5288;
+  --s-link-rgb: 29, 82, 136;
+  --s-positive: #2f8a6a;
+  --s-success: #1f6b52;
+  --s-warn: #8f5600;
+  --s-warn-soft: #fcefd6;
+  --s-danger: #b42318;
+  --s-danger-soft: #fbe9e7;
+  --s-relay: #f0a483;
+  --s-on-dark: #f3f2ee;
+  --s-on-dark-muted: #c3ccd6;
+  --s-dark-line: #2f4560;
+  --s-on-dark-accent: #8fc1ee;
+  --s-promo-from: #22405e;
+  --s-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2312263a'/%3E%3Crect x='28.5' y='16' width='17' height='32' rx='1.5' fill='%238fc1ee'/%3E%3Cpath d='M28.5 16 19.5 12.8V51.2L28.5 48Z' fill='%23f3f2ee' stroke='%23f3f2ee' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Twilight. Purples from twilight to deep night, with the sun's gold; a purple sidebar. */
+html[data-theme="brand"][data-scheme="twilight"] {
+  --s-ink: #24123d;
+  --s-ink-rgb: 36, 18, 61;
+  --s-ink2: #3a2160;
+  --s-muted: #4e3d66;
+  --s-subtle: #66577d;
+  --s-canvas: #f4f0f9;
+  --s-band: #e9e1f2;
+  --s-line: #e4dbef;
+  --s-line-strong: #d2c5e3;
+  --s-hairline: #efe9f6;
+  --s-accent: #8e44c4;
+  --s-accent-hover: #7a35ae;
+  --s-on-accent: #ffffff;
+  --s-soft: #f1e5f8;
+  --s-soft-hover: #e5cdf2;
+  --s-accent-ink: #6a2a96;
+  --s-link: #5b3fae;
+  --s-link-rgb: 91, 63, 174;
+  --s-positive: #2a8a76;
+  --s-success: #1e6b5b;
+  --s-warn: #93500f;
+  --s-warn-soft: #fbe6cc;
+  --s-danger: #b3342b;
+  --s-danger-soft: #fbe6e3;
+  --s-relay: #e0937c;
+  --s-on-dark: #f6f0fb;
+  --s-on-dark-muted: #d3c7e2;
+  --s-dark-line: #4a3570;
+  --s-on-dark-accent: #f6c56b;
+  --s-promo-from: #6b3fa0;
+  --s-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2324123d'/%3E%3Crect x='28.5' y='16' width='17' height='32' rx='1.5' fill='%23f6c56b'/%3E%3Cpath d='M28.5 16 19.5 12.8V51.2L28.5 48Z' fill='%23f6f0fb' stroke='%23f6f0fb' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* ================================================================ mapping */
+
+html[data-theme="brand"] {
+  --font-body: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+
+  --portal-navy: var(--s-ink);
+  --portal-navy-deep: var(--s-ink);
+  --portal-navy-soft: var(--s-muted);
+  --portal-navy-hover: var(--s-ink2);
+  --portal-teal: var(--s-ink);
+  --portal-teal-ink: var(--s-link);
+  --portal-teal-bright: var(--s-positive);
+  --portal-mint: var(--s-soft);
+  --portal-mint-hover: var(--s-soft-hover);
+  --portal-cta: var(--s-accent);
+  --portal-cta-hover: var(--s-accent-hover);
+  --portal-canvas: var(--s-canvas);
+  --portal-band: var(--s-band);
+  --portal-muted: var(--s-subtle);
+  --portal-line: var(--s-line);
+  --portal-line-strong: var(--s-line-strong);
+  --portal-hairline: var(--s-hairline);
+  --portal-amber: var(--s-warn);
+  --portal-amber-dot: color-mix(in srgb, var(--s-warn) 70%, #ffffff);
+  --portal-amber-soft: var(--s-warn-soft);
+  --portal-sky: var(--s-link);
+  --portal-sky-soft: color-mix(in srgb, var(--s-link) 12%, #ffffff);
+  --portal-danger: var(--s-danger);
+  --portal-danger-soft: var(--s-danger-soft);
+  --portal-shadow: 0 1px 2px rgba(var(--s-ink-rgb), 0.04),
+    0 6px 18px -8px rgba(var(--s-ink-rgb), 0.12);
+  --portal-shadow-hover: 0 2px 4px rgba(var(--s-ink-rgb), 0.05),
+    0 12px 28px -10px rgba(var(--s-ink-rgb), 0.2);
+  /* Solid colors only in this take: no gradients behind content. */
+  --portal-promo: var(--s-ink);
+
+  /* Neutral tints and greys follow the scheme's ink, so even hovers carry its hue. */
+  --portal-tint-0: color-mix(in srgb, var(--s-ink) 2%, #ffffff);
+  --portal-tint-1: color-mix(in srgb, var(--s-ink) 4%, #ffffff);
+  --portal-tint-2: color-mix(in srgb, var(--s-ink) 6%, #ffffff);
+  --portal-hover: color-mix(in srgb, var(--s-ink) 6%, #ffffff);
+  --portal-tint-3: color-mix(in srgb, var(--s-ink) 7%, #ffffff);
+  --portal-tint-4: color-mix(in srgb, var(--s-ink) 8%, #ffffff);
+  --portal-tint-5: color-mix(in srgb, var(--s-ink) 9%, #ffffff);
+  --portal-tint-6: color-mix(in srgb, var(--s-ink) 11%, #ffffff);
+  --portal-tint-7: color-mix(in srgb, var(--s-ink) 12%, #ffffff);
+  --portal-tint-8: color-mix(in srgb, var(--s-ink) 13%, #ffffff);
+  --portal-gray-1: color-mix(in srgb, var(--s-ink) 24%, #ffffff);
+  --portal-gray-2: color-mix(in srgb, var(--s-ink) 30%, #ffffff);
+  --portal-icon: color-mix(in srgb, var(--s-ink) 42%, #ffffff);
+  --portal-dot-off: color-mix(in srgb, var(--s-ink) 40%, #ffffff);
+  --portal-gray-3: color-mix(in srgb, var(--s-ink) 48%, #ffffff);
+  --portal-gray-4: color-mix(in srgb, var(--s-ink) 62%, #ffffff);
+  --portal-gray-5: color-mix(in srgb, var(--s-ink) 66%, #ffffff);
+  --portal-gray-6: color-mix(in srgb, var(--s-ink) 72%, #ffffff);
+  --portal-mint-1: color-mix(in srgb, var(--s-accent) 8%, #ffffff);
+  --portal-mint-2: color-mix(in srgb, var(--s-accent) 16%, #ffffff);
+  --portal-mint-3: color-mix(in srgb, var(--s-accent) 24%, #ffffff);
+  --portal-shadow-rgb: var(--s-ink-rgb);
+  --portal-ink-rgb: var(--s-ink-rgb);
+  --portal-overlay-rgb: var(--s-ink-rgb);
+  --portal-accent-rgb: var(--s-link-rgb);
+
+  --color-bg: var(--s-canvas);
+  --color-surface: #ffffff;
+  --color-surface-subtle: color-mix(in srgb, var(--s-ink) 5%, var(--s-canvas));
+  --color-surface-raised: #ffffff;
+  --color-ink: var(--s-ink);
+  --color-ink-muted: var(--s-muted);
+  --color-ink-subtle: var(--s-subtle);
+  --color-ink-inverse: #ffffff;
+  --color-border: var(--s-line);
+  --color-border-strong: var(--s-line-strong);
+  --color-border-hairline: var(--s-hairline);
+  --color-accent: var(--s-accent);
+  --color-accent-hover: var(--s-accent-hover);
+  --color-accent-soft: var(--s-soft);
+  --color-accent-ink: var(--s-accent-ink);
+  --color-success: var(--s-success);
+  --color-warning: var(--s-warn);
+  --color-danger: var(--s-danger);
+  --shadow-raised: 0 0 0 1px rgba(var(--s-ink-rgb), 0.05),
+    0 28px 70px -16px rgba(var(--s-ink-rgb), 0.32);
+  --shadow-focus: 0 0 0 4px rgba(var(--s-link-rgb), 0.16);
+}
+html[data-theme="brand"] .agency-app,
+html[data-theme="brand"] .agency-dialog {
+  --agency-green: var(--s-ink);
+  --agency-soft: var(--s-soft);
+  --agency-line: var(--s-line);
+}
+
+/* Focus follows the link color; on dark surfaces, the scheme's light accent. */
+html[data-theme="brand"] :focus-visible {
+  outline-color: var(--s-link);
+}
+html[data-theme="brand"] .agency-demo-banner :focus-visible,
+html[data-theme="brand"] .agency-connection :focus-visible {
+  outline-color: var(--s-on-dark-accent);
+}
+
+/* Accent fills take the scheme's on-accent text: dark on saffron and sunset orange,
+   white on barn red and lake blue. */
+html[data-theme="brand"] .agency-connection a,
+html[data-theme="brand"] .agency-bootstrap-demo .agency-button,
+html[data-theme="brand"] .portal-team .portal-avatar[data-tone="2"] {
+  color: var(--s-on-accent);
+}
+
+/* ================================================================ brand mark */
+
+html[data-theme="brand"] .agency-mark {
+  background: var(--s-mark) center / cover no-repeat !important;
+  color: transparent;
+  box-shadow: none !important;
+}
+html[data-theme="brand"] .agency-mark svg {
+  visibility: hidden;
+}
+html[data-theme="brand"] .agency-brand > span:not(.agency-mark) {
+  letter-spacing: -0.02em;
+}
+
+/* ================================================================ accents */
+
+html[data-theme="brand"] .agency-sidebar nav button[aria-current] {
+  background: var(--s-soft);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .agency-sidebar nav button[aria-current] svg {
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .agency-tabs button[aria-current]::after {
+  background: var(--s-accent);
+}
+html[data-theme="brand"] .portal-avatar[data-tone="mint"],
+html[data-theme="brand"] .account-people li > svg {
+  background: var(--s-soft-hover);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .agency-button.primary:hover {
+  border-color: var(--s-ink2);
+  background: var(--s-ink2);
+}
+/* The Relay card is the one place the Relay color appears. */
+html[data-theme="brand"] .agency-connection > svg {
+  color: var(--s-relay);
+}
+
+/* ================================================================ appearance setting */
+
+html[data-theme="brand"] .brand-schemes {
+  margin-bottom: 18px;
+}
+html[data-theme="brand"] .brand-schemes h2 {
+  margin-bottom: 4px;
+}
+html[data-theme="brand"] .brand-schemes > p {
+  margin-bottom: 16px;
+  color: var(--s-subtle);
+}
+html[data-theme="brand"] .brand-scheme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+html[data-theme="brand"] .brand-scheme-grid button {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--s-line);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--s-ink);
+  text-align: left;
+}
+html[data-theme="brand"] .brand-scheme-grid button:hover {
+  border-color: var(--s-line-strong);
+}
+html[data-theme="brand"] .brand-scheme-grid button[aria-pressed="true"] {
+  border-color: var(--s-ink);
+  box-shadow: 0 0 0 1px var(--s-ink);
+}
+html[data-theme="brand"] .brand-scheme-dots {
+  display: flex;
+  align-items: center;
+  padding: 6px 2px 2px;
+}
+html[data-theme="brand"] .brand-scheme-dots i {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin-right: -6px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2.5px #ffffff, 0 0 0 3.5px rgba(0, 0, 0, 0.08);
+}
+html[data-theme="brand"] .brand-scheme-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+html[data-theme="brand"] .brand-scheme-name small {
+  display: block;
+  color: var(--s-subtle);
+  font-weight: 400;
+}
+
+/* The selected scheme's check sits on its swatch, so the description keeps its width. */
+html[data-theme="brand"] .brand-scheme-grid button {
+  position: relative;
+}
+html[data-theme="brand"] .brand-scheme-name svg {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--s-ink);
+  color: #ffffff;
+}
+
+/* ================================================================ demo bar */
+
+/* The demo's controls live in Tools (brand-parts.tsx); the org block says "Demo". */
+html[data-theme="brand"] .agency-demo-banner {
+  display: none;
+}
+/* The public demo keeps its banner: visitors need the notice and the way onward. */
+html[data-theme="brand"] .agency-demo-banner.public {
+  display: flex;
+  padding: 10px 28px;
+  border-bottom: 0;
+  background: var(--s-ink);
+  color: var(--s-on-dark);
+  font-size: 13px;
+}
+html[data-theme="brand"] .agency-demo-banner.public > span svg {
+  flex: none;
+  color: var(--s-on-dark-accent);
+}
+html[data-theme="brand"] .agency-demo-banner.public button {
+  color: var(--s-on-dark-muted);
+  font-size: 13px;
+}
+html[data-theme="brand"] .agency-demo-banner.public button:hover {
+  color: var(--s-on-dark);
+}
+html[data-theme="brand"] .agency-demo-banner.public .agency-demo-link {
+  padding: 7px 14px;
+  border-radius: 9px;
+  background: var(--s-accent);
+  color: var(--s-on-accent);
+}
+html[data-theme="brand"] .agency-demo-banner.public .agency-demo-link:hover {
+  background: var(--s-accent-hover);
+}
+
+/* ================================================================ Relay card */
+
+/* Relay's own mark on Relay's solid clay (white text at 5.2:1). */
+html[data-theme="brand"] .agency-connection {
+  background: #a7553c;
+  color: #ffffff;
+  box-shadow: 0 16px 34px -16px rgba(143, 70, 48, 0.6);
+}
+html[data-theme="brand"] .agency-connection > svg {
+  display: none;
+}
+html[data-theme="brand"] .agency-connection::before {
+  content: "";
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: url("/brand/relay-mark.png") center / cover no-repeat;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28);
+}
+html[data-theme="brand"] .agency-connection small {
+  color: #ffffff;
+  opacity: 1;
+}
+
+/* ================================================================ account heading */
+
+/* Edit account is plain text beside the Add button, so the page has one clear action. */
+html[data-theme="brand"] .account-heading-actions .agency-button.quiet {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--s-muted);
+}
+html[data-theme="brand"] .account-heading-actions .agency-button.quiet:hover {
+  background: var(--s-band);
+  color: var(--s-ink);
+}
+
+/* ================================================================ account tabs */
+
+html[data-theme="brand"] .account-tabs button {
+  color: var(--portal-muted);
+  font-size: 15px;
+}
+html[data-theme="brand"] .account-tabs button:hover,
+html[data-theme="brand"] .account-tabs button[aria-selected="true"] {
+  color: var(--portal-navy);
+}
+html[data-theme="brand"] .account-tabs button[aria-selected="true"]::after {
+  background: var(--s-accent);
+}
+html[data-theme="brand"] .account-tabs button span {
+  background: var(--portal-tint-2);
+  color: var(--portal-muted);
+}
+html[data-theme="brand"] .account-tabbar .account-search-bar .agency-search {
+  min-height: 42px;
+}
+
+/* ================================================================ person */
+
+/* With no top bar, the signed-in person sits under the Relay card, past a divider.
+   It opens Settings, as the top bar's account chip did in the broker portal take. */
+html[data-theme="brand"] .agency-person {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 8px 0;
+  border-top: 1px solid var(--portal-line);
+  border-radius: 0;
+  color: var(--portal-muted);
+  font-size: 14px !important;
+  font-weight: 700;
+  line-height: 1.3;
+}
+html[data-theme="brand"] .agency-person > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--portal-navy);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html[data-theme="brand"] .agency-person small {
+  margin-top: 2px;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+html[data-theme="brand"] .agency-person .agency-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--portal-navy);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+html[data-theme="brand"] .agency-person > svg {
+  flex-shrink: 0;
+  color: var(--portal-icon);
+}
+html[data-theme="brand"] .agency-person:hover > svg,
+html[data-theme="brand"] .agency-person:hover > span:nth-child(2) {
+  color: var(--portal-navy);
+}
+html[data-theme="brand"] .agency-person:hover .agency-avatar {
+  box-shadow: 0 0 0 3px var(--portal-tint-4);
+}
+
+/* Pages open on their own heading now that the top bar is gone. */
+html[data-theme="brand"] .agency-main,
+html[data-theme="brand"] .agency-main:has(.account-workspace) {
+  padding-top: 40px;
+}
+@media (max-width: 1150px) {
+  html[data-theme="brand"] .agency-main,
+  html[data-theme="brand"] .agency-main:has(.account-workspace) {
+    padding-top: 28px;
+  }
+}
+@media (max-width: 780px) {
+  html[data-theme="brand"] .agency-main,
+  html[data-theme="brand"] .agency-main:has(.account-workspace) {
+    padding-top: 16px;
+  }
+}
+
+/* ================================================================ sidebar nav */
+
+html[data-theme="brand"] .brand-nav {
+  display: flex;
+  flex-direction: column;
+}
+html[data-theme="brand"] .brand-nav-label {
+  display: block;
+  margin: 14px 14px 4px;
+  color: var(--s-subtle);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[data-theme="brand"] .brand-nav-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+html[data-theme="brand"] .brand-nav-pin-row {
+  position: relative;
+  display: flex;
+}
+html[data-theme="brand"] .brand-nav-pin-row > button:first-child {
+  flex: 1;
+  padding-right: 40px;
+}
+html[data-theme="brand"] .brand-unpin {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 8px;
+  color: var(--s-subtle);
+  opacity: 0;
+  transform: translateY(-50%);
+}
+html[data-theme="brand"] .brand-nav-pin-row:hover .brand-unpin,
+html[data-theme="brand"] .brand-unpin:focus-visible {
+  opacity: 1;
+}
+html[data-theme="brand"] .brand-unpin:hover {
+  background: var(--portal-tint-4);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .brand-tools {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--portal-tint-3);
+}
+html[data-theme="brand"] .brand-tools-button {
+  width: 100%;
+}
+html[data-theme="brand"] .brand-tools-chevron {
+  width: 15px !important;
+  height: 15px !important;
+  margin-left: auto;
+}
+html[data-theme="brand"] .brand-tools-button[aria-expanded="true"] {
+  background: var(--portal-tint-1);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .brand-tools-panel {
+  position: fixed;
+  z-index: 70;
+  width: 300px;
+  max-height: min(560px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 14px 10px 10px;
+  border: 1px solid var(--s-line);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -18px rgba(var(--s-ink-rgb), 0.35);
+}
+html[data-theme="brand"] .brand-tools-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 8px 10px;
+  color: var(--s-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+html[data-theme="brand"] .brand-tools-title small {
+  color: var(--s-subtle);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+html[data-theme="brand"] .brand-tools-panel ul {
+  display: grid;
+  gap: 1px;
+}
+html[data-theme="brand"] .brand-tools-panel li {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+html[data-theme="brand"] .brand-tools-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 44px 0 10px;
+  border-radius: 10px;
+  color: var(--s-muted);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-align: left;
+}
+html[data-theme="brand"] .brand-tools-item svg {
+  flex-shrink: 0;
+  color: var(--portal-gray-3);
+}
+html[data-theme="brand"] .brand-tools-item:hover,
+html[data-theme="brand"] .brand-tools-item[aria-current] {
+  background: var(--portal-tint-1);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .brand-tools-item[aria-current] {
+  font-weight: 700;
+}
+html[data-theme="brand"] .brand-tools-pin {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--s-subtle);
+  opacity: 0;
+}
+html[data-theme="brand"] .brand-tools-panel li:hover .brand-tools-pin,
+html[data-theme="brand"] .brand-tools-pin:focus-visible,
+html[data-theme="brand"] .brand-tools-pin[aria-pressed="true"] {
+  opacity: 1;
+}
+html[data-theme="brand"] .brand-tools-pin[aria-pressed="true"] {
+  background: var(--s-soft);
+  color: var(--s-accent-ink);
+}
+html[data-theme="brand"] .brand-tools-pin:hover {
+  background: var(--s-soft-hover);
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .brand-tools-demo {
+  margin: 10px 4px 0;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--s-hairline);
+}
+html[data-theme="brand"] .brand-tools-demo p {
+  margin: 0 4px 8px;
+  color: var(--s-subtle);
+  font-size: 12.5px;
+}
+html[data-theme="brand"] .brand-tools-demo p strong {
+  color: var(--s-ink);
+}
+html[data-theme="brand"] .brand-tools-demo > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+html[data-theme="brand"] .brand-tools-demo button,
+html[data-theme="brand"] .brand-tools-demo a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--s-line);
+  border-radius: 999px;
+  color: var(--s-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+html[data-theme="brand"] .brand-tools-demo a {
+  text-decoration: none;
+}
+html[data-theme="brand"] .brand-tools-demo button:hover,
+html[data-theme="brand"] .brand-tools-demo a:hover {
+  background: var(--portal-tint-1);
+}
+html[data-theme="brand"] .brand-tools-demo button:disabled {
+  opacity: 0.55;
+}
+
+/* ================================================================ twilight sidebar */
+
+/* A solid twilight purple sidebar; its light text is above 9:1. */
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar {
+  border-right: 0;
+  background: #432673;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-brand {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-org {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-org > svg,
+html[data-theme="brand"][data-scheme="twilight"] .agency-org small {
+  color: #e6dcf3;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar nav button {
+  color: #f1eaf9;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-person {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-person > span:nth-child(2),
+html[data-theme="brand"][data-scheme="twilight"] .agency-person:hover > svg,
+html[data-theme="brand"][data-scheme="twilight"] .agency-person:hover > span:nth-child(2) {
+  color: #ffffff;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-person small,
+html[data-theme="brand"][data-scheme="twilight"] .agency-person > svg {
+  color: #e6dcf3;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-person .agency-avatar {
+  background: #f6c56b;
+  color: #24123d;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-person:hover .agency-avatar {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar nav button svg {
+  color: #dccfee;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar nav button:hover,
+html[data-theme="brand"][data-scheme="twilight"] .brand-tools-button[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar nav button[aria-current] {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+html[data-theme="brand"][data-scheme="twilight"] .agency-sidebar nav button[aria-current] svg {
+  color: #f6c56b;
+}
+html[data-theme="brand"][data-scheme="twilight"] .brand-nav-label {
+  color: #dccfee;
+}
+html[data-theme="brand"][data-scheme="twilight"] .brand-tools {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+html[data-theme="brand"][data-scheme="twilight"] .brand-unpin {
+  color: #dccfee;
+}
+html[data-theme="brand"][data-scheme="twilight"] .brand-unpin:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+@media (max-width: 780px) {
+  html[data-theme="brand"] .brand-tools-panel {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin-top: 6px;
+    box-shadow: none;
+  }
+}
+
+/* "Need you" stays a plain white card; its warm border and amber count mark it. */
+html[data-theme="brand"] .portal-stat[data-tone="you"] {
+  background: #ffffff;
+}

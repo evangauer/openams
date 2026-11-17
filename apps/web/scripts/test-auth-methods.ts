@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { runtimeSmsSignin, documentSmsSignin, internationalPhone, phoneSetupRequested } from "../src/lib/auth-methods";
+assert.equal(runtimeSmsSignin({}), false);
+assert.equal(runtimeSmsSignin({ AMS_SMS_SIGNIN: "1" }), true);
+for (const flag of ["1", "true", "yes", "required"]) assert.equal(runtimeSmsSignin({ AMS_SMS_SIGNIN: "1", AMS_REQUIRE_MFA: flag }), false);
+assert.equal(runtimeSmsSignin({ AMS_SMS_SIGNIN: "false" }), false);
+assert.equal(runtimeSmsSignin({ AMS_SMS_SIGNIN: "1", AMS_AUTH_TENANT_ID: "demo-tenant" }), false);
+assert.equal(runtimeSmsSignin({ AMS_SMS_SIGNIN: "1", AMS_AUTH_TENANT_ID: "  " }), true);
+assert.equal(documentSmsSignin(undefined), false);
+assert.equal(internationalPhone("+1 (202) 555-0123"), "+12025550123");
+for (const phone of ["2025550123", "+0123456789", "+12025550123, +12025550124", "+1", "https://example.org"]) assert.throws(() => internationalPhone(phone));
+assert.equal(phoneSetupRequested("https://ams.fixture.example/sign-in/finish?phone=add"), true);
+const destination = encodeURIComponent("https://ams.fixture.example/sign-in/finish?phone=add");
+assert.equal(phoneSetupRequested(`https://ams.fixture.example/sign-in/finish?continueUrl=${destination}`), true);
+assert.equal(phoneSetupRequested("https://ams.fixture.example/sign-in/finish?continueUrl=https%3A%2F%2Fother.example%2Fsign-in%2Ffinish%3Fphone%3Dadd"), false);
+assert.equal(phoneSetupRequested("https://ams.fixture.example/sign-in/finish"), false);
+console.log("SMS policy, phone formatting and email-link setup destination checks passed.");

@@ -1,0 +1,58 @@
+# Firebase App Hosting configuration for the OpenAMS Firebase deployment.
+# See docs/firebase.md. This file holds no project-specific values: App Hosting supplies
+# FIREBASE_CONFIG (runtime) and FIREBASE_WEBAPP_CONFIG (build), and the values below
+# that differ per deployment are read from Cloud Secret Manager by name.
+runConfig:
+  minInstances: 0
+  maxInstances: 10
+  # Requests per instance. Kept modest so one heavy request (export, search) can't
+  # starve the rest of a 1 GiB instance.
+  concurrency: 40
+  cpu: 1
+  memoryMiB: 1024
+
+scripts:
+  buildCommand: node scripts/apphosting-build.mjs
+  runCommand: node scripts/firebase-start.mjs
+
+env:
+  # Runtime only: a production NODE_ENV during the build would skip dev dependencies.
+  - variable: NODE_ENV
+    value: production
+    availability: [RUNTIME]
+  - variable: AMS_AUTH_MODE
+    value: firebase
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_TELEMETRY_DISABLED
+    value: "1"
+    availability: [BUILD, RUNTIME]
+  # The public origin users sign in at (e.g. https://app.example.org). Used for the
+  # cross-site request check and as the expected audience of scheduler tokens.
+  - variable: NEXT_PUBLIC_APP_URL
+    secret: openams-public-url
+    availability: [BUILD, RUNTIME]
+  # reCAPTCHA Enterprise site key for Firebase App Check. Required: sign-in is public,
+  # so it must not run without App Check. (Not secret, but per-project.)
+  - variable: NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY
+    secret: openams-recaptcha-site-key
+    availability: [BUILD, RUNTIME]
+  # Cloud Scheduler calls POST /api/internal/reminders with a Google-signed OIDC token
+  # for this service account; anything else is refused.
+  - variable: AMS_SCHEDULER_SERVICE_ACCOUNT
+    secret: openams-scheduler-service-account
+    availability: [RUNTIME]
+  # Who may create agencies: "admin" (one agency, set up by the administrator email
+  # below) or "open" (anyone can create their own agency). See docs/hosted-identity.md.
+  - variable: AMS_SIGNUP
+    secret: openams-signup-mode
+    availability: [RUNTIME]
+  # The administrator email(s) allowed to set up this instance's agency on first
+  # sign-in ("admin" mode). Everyone else joins by invitation. See docs/self-hosting.md.
+  - variable: AMS_ADMIN_EMAIL
+    secret: openams-admin-email
+    availability: [RUNTIME]
+  # Optional read-only status endpoint (GET /api/internal/status) for uptime monitoring.
+  # "off" disables it (404), which is right unless you use one. See docs/instance-status.md.
+  - variable: AMS_STATUS_SERVICE_ACCOUNT
+    secret: openams-status-service-account
+    availability: [RUNTIME]

@@ -1,0 +1,3 @@
+# Cloud Build uploads: everything Git ignores (including .oss-denylist), plus .git.
+.git
+#!include:.gitignore

@@ -1,0 +1,4 @@
+external_id,account_external_id,source_created_at,source_author,policy_number,policy_carrier,policy_effective_date,title,description,due_date,priority
+tk-1001,acct-1002,2026-10-21T15:00:00Z,Previous AMS,RRX-WC-2025,Lakeview Casualty (fictional),2025-12-15,Request updated payroll for workers comp renewal,Ask Kim for the year-to-date payroll report.,2026-11-14,high
+tk-1002,acct-1006,2026-10-12T15:00:00Z,Previous AMS,IRF-PROP-2025,Northern Prairie Insurance (fictional),2025-12-01,Send sprinkler inspection to underwriter,Attach the inspection report and request a protection credit.,2026-11-18,normal
+tk-1003,acct-1007,2026-10-28T15:00:00Z,Previous AMS,,,,Prepare businessowners proposal,Gather current declarations and property details.,2026-12-05,normal

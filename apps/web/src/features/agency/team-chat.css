@@ -1,0 +1,424 @@
+/* Team chat: presence on avatars, the team card's chat buttons and the chat panel.
+   Built from the team card's own parts so it reads as the same UI. */
+
+/* ---------------------------------------------------------------- avatars */
+
+html[data-theme] .portal-avatar[data-tone="0"] {
+  background: var(--portal-navy-soft);
+  color: #ffffff;
+}
+html[data-theme] .portal-avatar[data-tone="2"] {
+  background: var(--portal-cta);
+  color: var(--s-on-accent, var(--portal-navy));
+}
+html[data-theme] .portal-avatar[data-online] {
+  position: relative;
+}
+html[data-theme] .portal-avatar[data-online]::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--s-positive, #1f8a55);
+  box-shadow: 0 0 0 2px #ffffff;
+}
+html[data-theme] .portal-team .portal-avatar[data-online]::after {
+  box-shadow: 0 0 0 2.5px var(--portal-band);
+}
+html[data-theme] .portal-avatar[data-small] {
+  width: 32px;
+  height: 32px;
+  font-size: 11.5px;
+}
+
+/* -------------------------------------------------------------- team card */
+
+html[data-theme] .portal-team-presence[data-online] {
+  color: var(--s-success, var(--portal-teal-ink));
+  font-weight: 600;
+}
+html[data-theme] .portal-team .portal-team-chat {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--portal-navy);
+}
+html[data-theme] .portal-team .portal-team-chat:hover {
+  background: var(--portal-navy);
+  color: #ffffff;
+}
+.team-chat-badge,
+html[data-theme] .portal-team .portal-team-chat em,
+.team-chat-row-meta em {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--portal-cta);
+  color: var(--s-on-accent, var(--portal-navy));
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+html[data-theme] .portal-team .portal-team-chat em {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  box-shadow: 0 0 0 2px var(--portal-band);
+}
+
+/* ------------------------------------------------------------------ panel */
+
+.team-chat {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 46;
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--portal-line);
+  border-radius: var(--portal-radius, 16px);
+  background: #ffffff;
+  box-shadow:
+    0 24px 60px rgba(var(--portal-shadow-rgb), 0.18),
+    0 2px 6px rgba(var(--portal-shadow-rgb), 0.06);
+  color: var(--portal-navy);
+  animation: team-chat-in 160ms ease-out;
+}
+@keyframes team-chat-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-chat {
+    animation: none;
+  }
+}
+@media (max-width: 640px) {
+  .team-chat {
+    inset: 0;
+    width: auto;
+    border: 0;
+    border-radius: 0;
+  }
+}
+@media print {
+  .team-chat {
+    display: none;
+  }
+}
+
+.team-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 12px 18px;
+  border-bottom: 1px solid var(--portal-hairline);
+}
+.team-chat-head:has(> .team-chat-icon:first-child) {
+  padding-left: 10px;
+}
+.team-chat-who {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.team-chat-who > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.team-chat-who strong {
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.team-chat-who small,
+.team-chat-row-text small {
+  overflow: hidden;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.team-chat small[data-online] {
+  color: var(--s-success, var(--portal-teal-ink));
+  font-weight: 600;
+}
+.team-chat-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--portal-navy);
+}
+.team-chat-icon:hover {
+  background: var(--portal-hover);
+}
+.team-chat-room {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--portal-band);
+  color: var(--portal-navy);
+}
+
+/* Conversations */
+.team-chat-list {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  overscroll-behavior: contain;
+}
+.team-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.team-chat-row:hover {
+  background: var(--portal-hover);
+}
+.team-chat-row-text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+.team-chat-row-text strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.team-chat-row[data-unread] strong {
+  font-weight: 700;
+}
+.team-chat-row[data-unread] .team-chat-row-text small {
+  color: var(--portal-navy);
+}
+.team-chat-row-meta {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  align-self: start;
+  padding-top: 2px;
+  color: var(--portal-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.team-chat-label {
+  padding: 14px 10px 6px;
+  color: var(--portal-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.team-chat-empty {
+  padding: 4px 10px;
+  color: var(--portal-muted);
+  font-size: 13px;
+}
+
+/* One conversation */
+.team-chat-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  padding: 12px 18px 8px;
+  overscroll-behavior: contain;
+}
+/* Few messages sit at the bottom, next to the box you type in. */
+.team-chat-log > :first-child {
+  margin-top: auto;
+}
+.team-chat-message {
+  display: flex;
+  gap: 10px;
+  padding: 1px 0;
+}
+.team-chat-message[data-first] {
+  margin-top: 12px;
+}
+.team-chat-gutter {
+  flex-shrink: 0;
+  width: 32px;
+}
+.team-chat-message > div {
+  flex: 1;
+  min-width: 0;
+}
+.team-chat-by {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.team-chat-by strong {
+  font-weight: 700;
+}
+.team-chat-by time {
+  color: var(--portal-muted);
+  font-size: 11.5px;
+}
+.team-chat-body {
+  color: rgba(var(--portal-ink-rgb), 0.88);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.team-chat-message[data-pending] .team-chat-body {
+  opacity: 0.55;
+}
+.team-chat-failed {
+  margin-top: 2px;
+  color: var(--portal-danger);
+  font-size: 12.5px;
+}
+.team-chat-failed button {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.team-chat-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  color: var(--portal-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.team-chat-day::before,
+.team-chat-day::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--portal-line);
+}
+.team-chat-start {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 8px 0 4px;
+  color: var(--portal-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.team-chat-start strong {
+  color: var(--portal-navy);
+}
+.team-chat-older {
+  align-self: center;
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--portal-teal-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.team-chat-older:hover {
+  background: var(--portal-hover);
+}
+.team-chat-note {
+  padding: 8px;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.team-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 8px 12px 12px;
+  padding: 5px 5px 5px 14px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 14px;
+  background: #ffffff;
+}
+.team-chat-composer:focus-within {
+  border-color: var(--portal-navy);
+  box-shadow: 0 0 0 3px rgba(var(--portal-ink-rgb), 0.08);
+}
+.team-chat-composer textarea {
+  flex: 1;
+  min-height: 34px;
+  max-height: 132px;
+  padding: 7px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+}
+.team-chat-send {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--portal-navy);
+  color: #ffffff;
+}
+.team-chat-send:disabled {
+  background: var(--portal-band);
+  color: var(--portal-icon);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+:is(html[data-theme]) .agency-sidebar .brand-nav button.team-chat-nav em {
+  background: var(--portal-cta);
+  color: var(--s-on-accent, var(--portal-navy));
+}
+:is(html[data-theme])
+  .agency-sidebar
+  .brand-nav
+  button.team-chat-nav[aria-expanded="true"] {
+  background: var(--portal-tint-1);
+  color: var(--s-ink, var(--portal-navy));
+}
+
+/* The composer's border shows focus, like the workspace search box. */
+html[data-theme] .team-chat-composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}

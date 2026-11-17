@@ -1,0 +1,33 @@
+{
+  "name": "openams",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open-source agency management system for independent insurance agencies.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
+  "workspaces": [
+    "packages/contracts",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @openams/contracts && npm run build --workspace @openams/api && npm run build --workspace @openams/web",
+    "dev": "npm run build --workspace @openams/contracts && npm run build --workspace @openams/api && node scripts/dev.mjs",
+    "dev:firebase": "npm run build --workspace @openams/contracts && npm run build --workspace @openams/api && node scripts/dev-firebase.mjs",
+    "emulators": "firebase emulators:start --project demo-openams --only auth,firestore,storage",
+    "test": "npm run build --workspace @openams/contracts && npm run build --workspace @openams/api && npm test --workspace @openams/api && npm test --workspace @openams/web",
+    "typecheck": "npm run build --workspace @openams/contracts && npm run typecheck --workspace @openams/api && npm run typecheck --workspace @openams/web",
+    "verify:oss-release": "node scripts/verify-oss-release.mjs",
+    "verify:deployment": "node scripts/verify-deployment.mjs",
+    "check": "npm run verify:oss-release && npm run typecheck && npm test && npm run build --workspace @openams/web",
+    "backup": "node scripts/backup.mjs"
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.14.7"
+    }
+  }
+}

@@ -1,0 +1,3428 @@
+/*
+ * Broker portal take. Every rule is scoped to
+ * the portal and brand themes so the current design is unaffected; brand.css recolors
+ * this layout with the OpenAMS palette.
+ *
+ * The language: a white sidebar with a big wordmark, a soft grey canvas, borderless
+ * white cards with large radii and whisper shadows, navy type, a teal accent and a
+ * mint call to action. Lists are row cards under a grey header band; status is a
+ * coloured dot beside its word, so colour never carries meaning alone.
+ */
+
+/* ================================================================ tokens */
+
+html:is([data-theme="portal"], [data-theme="brand"]) {
+  --font-body: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --portal-navy: #0a3345;
+  --portal-navy-deep: #062f43;
+  --portal-navy-soft: #3f5d6d;
+  --portal-teal: #007e76;
+  --portal-teal-ink: #00665d;
+  --portal-teal-bright: #12b9a6;
+  --portal-mint: #e8f7f4;
+  --portal-mint-hover: #d6f2ec;
+  --portal-cta: #7fd8cb;
+  --portal-cta-hover: #9fe6dc;
+  --portal-canvas: #f4f6f6;
+  --portal-band: #e9edee;
+  --portal-muted: #557081;
+  --portal-line: #e3ecef;
+  --portal-line-strong: #d5e2e7;
+  --portal-hairline: #edf2f3;
+  --portal-amber: #8a5300;
+  --portal-amber-dot: #e29a16;
+  --portal-amber-soft: #fff1dc;
+  --portal-sky: #2f6f99;
+  --portal-sky-soft: #e8f1f8;
+  --portal-danger: #a8382a;
+  --portal-danger-soft: #fff3f0;
+  --portal-radius: 16px;
+  --portal-radius-sm: 12px;
+  --portal-shadow: 0 1px 2px rgba(6, 47, 67, 0.04),
+    0 6px 18px -8px rgba(6, 47, 67, 0.1);
+  --portal-shadow-hover: 0 2px 4px rgba(6, 47, 67, 0.05),
+    0 12px 28px -10px rgba(6, 47, 67, 0.18);
+  --portal-promo: linear-gradient(160deg, #0b4560, #0a5f63);
+
+  /* Shared tokens the workspace reads. */
+  --color-bg: #f4f6f6;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #eef2f3;
+  --color-surface-raised: #ffffff;
+  --color-ink: #0a3345;
+  --color-ink-muted: #557081;
+  --color-ink-subtle: #5f7480;
+  --color-border: #e3ecef;
+  --color-border-strong: #d5e2e7;
+  --color-border-hairline: #edf2f3;
+  --color-accent: #007e76;
+  --color-accent-hover: #00665d;
+  --color-accent-soft: #e8f7f4;
+  --color-accent-ink: #00665d;
+  --color-success: #00665d;
+  --color-warning: #8a5300;
+  --color-danger: #a8382a;
+  --radius-card: 20px;
+  --shadow-raised: 0 0 0 1px rgba(6, 47, 67, 0.04),
+    0 28px 70px -16px rgba(6, 47, 67, 0.3);
+  --shadow-focus: 0 0 0 4px rgba(0, 126, 118, 0.16);
+
+  /* Former literals, kept at their exact values here; brand.css retints them per scheme. */
+  --portal-hover: #eef1f2;
+  --portal-tint-0: #fafcfc;
+  --portal-tint-1: #f4f7f7;
+  --portal-tint-2: #eef2f3;
+  --portal-tint-3: #edf1f2;
+  --portal-tint-4: #eaeeef;
+  --portal-tint-5: #e8eced;
+  --portal-tint-6: #e2e7e8;
+  --portal-tint-7: #e1e7e9;
+  --portal-tint-8: #dfe5e7;
+  --portal-gray-1: #c3d4db;
+  --portal-gray-2: #b5c4cb;
+  --portal-icon: #9aabb3;
+  --portal-dot-off: #8fb4c6;
+  --portal-gray-3: #8fa3ad;
+  --portal-gray-4: #6b7f89;
+  --portal-gray-5: #5b707b;
+  --portal-gray-6: #4f6a7a;
+  --portal-mint-1: #eef8f6;
+  --portal-mint-2: #d7f3ee;
+  --portal-mint-3: #c9ede6;
+  --portal-navy-hover: #022331;
+  --portal-shadow-rgb: 6, 47, 67;
+  --portal-accent-rgb: 0, 126, 118;
+  --portal-overlay-rgb: 2, 35, 49;
+  --portal-ink-rgb: 10, 51, 69;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog {
+  --agency-green: #007e76;
+  --agency-soft: #e8f7f4;
+  --agency-line: #e3ecef;
+}
+
+/* A solid teal ring that clears 3:1 on white and grey; mint on dark surfaces. */
+html:is([data-theme="portal"], [data-theme="brand"]) :focus-visible {
+  outline: 2px solid var(--portal-teal);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner :focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection :focus-visible {
+  outline-color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) ::selection {
+  background: var(--portal-mint-hover);
+  color: var(--portal-navy);
+}
+
+/* Visually hidden, still read aloud. The workspace's own sr-only labels use it too. */
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-sr,
+html:is([data-theme="portal"], [data-theme="brand"]) .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ================================================================ base type */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog {
+  font-size: 15px;
+  color: var(--portal-navy);
+  -webkit-font-smoothing: antialiased;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app {
+  background: var(--portal-canvas);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1 {
+  font-size: clamp(28px, 2.4vw, 34px);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app small {
+  font-size: 13px;
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-overline {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--portal-teal-ink);
+  /* Source labels are upper case; read them in sentence case. */
+  text-transform: lowercase;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-overline::first-letter {
+  text-transform: uppercase;
+}
+
+/* ================================================================ sidebar */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar {
+  width: 264px;
+  padding: 0 0 18px;
+  background: #ffffff;
+  border-right: 1px solid var(--portal-tint-5);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand {
+  flex-shrink: 0;
+  width: 100%;
+  height: 88px;
+  padding: 0 28px;
+  gap: 12px;
+  border-bottom: 1px solid var(--portal-hover);
+  color: var(--portal-navy);
+  font-size: 27px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.045em;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand small {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand .agency-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--portal-navy);
+  color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-org {
+  flex-shrink: 0;
+  margin: 18px 20px 6px;
+  padding: 10px 14px;
+  gap: 12px;
+  border: 0;
+  border-radius: var(--portal-radius-sm);
+  background: var(--portal-canvas);
+  color: var(--portal-navy);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-org > svg {
+  flex-shrink: 0;
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-org small {
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav {
+  gap: 2px;
+  padding: 10px 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  gap: 14px;
+  border-radius: 10px;
+  color: var(--portal-gray-5);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button svg {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  color: var(--portal-gray-3);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button:hover {
+  background: var(--portal-tint-1);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button[aria-current] {
+  background: var(--portal-mint-1);
+  color: var(--portal-teal-ink);
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button[aria-current] svg {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button em {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--portal-amber-soft);
+  color: var(--portal-amber);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+/* With nothing open the count stays quiet instead of amber (see PortalTopActions). */
+html:is([data-theme="portal"], [data-theme="brand"])[data-portal-tasks="none"] .agency-sidebar nav button em {
+  background: var(--portal-tint-2);
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar-bottom {
+  padding: 14px 20px 0;
+}
+/* The Relay connection becomes the portal's coloured promo card. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection {
+  position: relative;
+  gap: 12px;
+  padding: 16px 16px 16px 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--portal-promo);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  box-shadow: 0 16px 34px -16px rgba(var(--portal-shadow-rgb), 0.55);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection > svg {
+  flex-shrink: 0;
+  color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection > span {
+  flex: 1;
+  min-width: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection small {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection a {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--portal-cta);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-connection a:hover {
+  background: var(--portal-cta-hover);
+}
+/* The account chip in the top bar replaces the sidebar's person block. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-person {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-menu-button {
+  display: none;
+}
+
+/* ================================================================ top bar */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar {
+  height: auto;
+  min-height: 84px;
+  padding: 18px 48px 6px;
+  gap: 16px;
+  border-bottom: 0;
+  background: transparent;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar > div {
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar > div:first-child {
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar > div:first-child > svg {
+  flex-shrink: 0;
+  color: var(--portal-icon);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar strong {
+  overflow: hidden;
+  color: var(--portal-navy);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar .account-breadcrumb {
+  color: var(--portal-muted);
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar .account-breadcrumb:hover {
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-live {
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--portal-teal-ink);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(var(--portal-shadow-rgb), 0.06);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-live i {
+  width: 7px;
+  height: 7px;
+  background: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-live.syncing {
+  color: var(--portal-amber);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-live.syncing i {
+  background: var(--portal-amber-dot);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-icon-button {
+  padding: 7px;
+  border-radius: 10px;
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-icon-button:hover {
+  background: var(--portal-tint-4);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-top-role {
+  padding-left: 0;
+  border-left: 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-bell:hover {
+  background: var(--portal-tint-4);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-bell i {
+  position: absolute;
+  top: 10px;
+  right: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e0563f;
+  box-shadow: 0 0 0 2px var(--portal-canvas);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 300px;
+  padding: 7px 14px 7px 7px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--portal-navy-soft);
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(var(--portal-shadow-rgb), 0.08);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip:hover {
+  color: var(--portal-navy);
+  box-shadow: 0 3px 10px rgba(var(--portal-shadow-rgb), 0.12);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-text {
+  min-width: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-text strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.3;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-text span {
+  display: block;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--portal-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--portal-teal-ink);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-avatar[data-tone="navy"] {
+  background: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-avatar[data-tone="mint"] {
+  background: var(--portal-mint-3);
+  color: var(--portal-navy);
+}
+
+/* ================================================================ layout */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-main,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-main:has(.account-workspace) {
+  max-width: 1456px;
+  padding: 14px 48px 56px;
+  margin: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-workspace-footer {
+  padding: 18px 48px 26px;
+  border-top: 0;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-page-header {
+  align-items: flex-end;
+  margin-bottom: 22px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-page-header p {
+  max-width: 64ch;
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-back {
+  gap: 4px;
+  margin-bottom: 14px;
+  color: var(--portal-muted);
+  font-size: 14px !important;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-back:hover {
+  color: var(--portal-navy);
+}
+
+/* ================================================================ buttons */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button {
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--portal-navy);
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button:hover {
+  background: var(--portal-tint-1);
+  border-color: var(--portal-gray-1);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button.primary {
+  border-color: var(--portal-navy);
+  background: var(--portal-navy);
+  color: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button.primary:hover {
+  border-color: var(--portal-navy-hover);
+  background: var(--portal-navy-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-button.quiet:hover {
+  background: var(--portal-mint);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-text-button,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-text-link {
+  gap: 6px;
+  color: var(--portal-teal-ink);
+  font-size: 14px !important;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-text-button:disabled {
+  color: var(--portal-muted);
+}
+
+/* Soft action pill, after the portal's "Review quote" and "View". */
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 92px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--portal-tint-3);
+  color: var(--portal-navy);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-pill:hover {
+  background: var(--portal-tint-7);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-pill[data-primary] {
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-pill[data-primary]:hover {
+  background: var(--portal-mint-hover);
+}
+
+/* ================================================================ status */
+
+/* Status reads as a dot plus its word: amber waits on you, teal is done. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge {
+  gap: 7px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge::before,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge::before {
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--portal-dot-off);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge.green,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge.positive {
+  background: transparent;
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge.green::before,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge.positive::before {
+  background: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge.amber,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge.attention {
+  background: transparent;
+  color: var(--portal-amber);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-badge.amber::before,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-badge.attention::before {
+  background: var(--portal-amber-dot);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-primary-label {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-status::before {
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-status[data-tone="you"] {
+  color: var(--portal-amber);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-status[data-tone="you"]::before {
+  background: var(--portal-amber-dot);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-status[data-tone="off"]::before {
+  background: var(--portal-dot-off);
+}
+
+/* ================================================================ tabs + search */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  border-bottom: 1.5px solid var(--portal-tint-6);
+  scrollbar-width: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs::-webkit-scrollbar,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs::-webkit-scrollbar {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  height: 50px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--portal-navy);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button:focus-visible {
+  outline-offset: -3px;
+  border-radius: 10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button span,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button span {
+  padding: 0;
+  background: none;
+  color: var(--portal-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button:hover,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button:hover {
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button[aria-pressed="true"],
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button[aria-current] {
+  color: var(--portal-teal-ink);
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-tabs button[aria-pressed="true"]::after,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button[aria-current]::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--portal-teal);
+}
+/* Financial sections read as filter chips, a level above the status tabs. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 10px;
+  border-bottom: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button {
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button:hover {
+  border-color: var(--portal-gray-1);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button[aria-current] {
+  border-color: var(--portal-navy);
+  background: var(--portal-navy);
+  color: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-tabs button[aria-current]::after {
+  display: none;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 340px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--portal-band);
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search > svg,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search > svg {
+  flex-shrink: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search input,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--portal-navy);
+  font: inherit;
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search input:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search input::placeholder,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search input::placeholder {
+  color: var(--portal-gray-6);
+  opacity: 1;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-search:focus-within,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-search:focus-within {
+  border-color: var(--portal-teal);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(var(--portal-accent-rgb), 0.16);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: var(--portal-navy);
+  font-size: 14px;
+}
+
+/* ================================================================ list views */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar {
+  gap: 12px 14px;
+  margin: 6px 0 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .portal-status-tabs {
+  flex: 1 1 360px;
+}
+/* The tabs drive the same filter, so the select steps aside. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > select {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .agency-toolbar-spacer {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .agency-button.primary {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 15px !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .agency-button.quiet {
+  min-height: 48px;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-count {
+  padding: 0 4px 2px;
+  border: 0;
+  color: var(--portal-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-scroll {
+  padding: 0 3px 6px;
+}
+/* Tables become separate white row cards under a grey header band. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app table:not(.account-coverage-table),
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog table:not(.account-coverage-table) {
+  border-collapse: separate;
+  border-spacing: 0 10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app th,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog th {
+  padding: 17px 14px;
+  background: var(--portal-band);
+  color: var(--portal-navy-soft);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app th:first-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog th:first-child {
+  border-radius: 12px 0 0 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app th:last-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog th:last-child {
+  border-radius: 0 12px 12px 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app td,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog td {
+  padding: 18px 14px;
+  border-top: 0;
+  background: #ffffff;
+  color: var(--portal-navy);
+  font-size: 15px;
+  box-shadow: 0 1px 0 rgba(var(--portal-shadow-rgb), 0.05);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app td:first-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog td:first-child {
+  border-radius: 12px 0 0 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app td:last-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog td:last-child {
+  border-radius: 0 12px 12px 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app tr:hover td {
+  background: #ffffff;
+}
+/* Cells wrap so the row card fits without scrolling; status and action stay whole. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td {
+  white-space: normal;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(-n + 2) {
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:first-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox + td {
+  min-width: 190px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox {
+  min-width: 0;
+  width: 52px;
+  padding-right: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox + td {
+  border-radius: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records th.account-directory-checkbox + th {
+  border-radius: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records .agency-record-link strong {
+  max-width: 340px;
+  white-space: normal;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app td small,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog td small {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app td strong {
+  font-weight: 600;
+}
+/* The action column sits behind a thin divider, as in the portal. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child {
+  width: 1%;
+  padding-inline: 20px;
+  border-left: 1px solid var(--portal-hover);
+  text-align: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records th:last-child {
+  text-align: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child .agency-icon-button {
+  gap: 4px;
+  height: 38px;
+  padding: 0 12px 0 16px;
+  border-radius: 999px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child .agency-icon-button::before {
+  content: "Open";
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child .agency-icon-button:hover {
+  background: var(--portal-mint-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-record-link {
+  gap: 14px;
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-record-link strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-record-link:hover strong {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records .agency-text-link {
+  color: var(--portal-navy);
+  font-size: 15px !important;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records .agency-text-link:hover {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-directory-checkbox input,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field input[type="checkbox"] {
+  accent-color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-directory .account-directory-next strong {
+  max-width: 240px;
+  font-size: 15px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:first-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-records th:first-child {
+  padding-left: 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-directory .account-directory-next small {
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-directory-selection {
+  margin-bottom: 6px;
+  border: 0;
+  border-radius: var(--portal-radius-sm);
+  background: var(--portal-mint);
+  color: var(--portal-navy);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-legacy-navigation {
+  margin: 20px 0 6px;
+}
+
+/* Empty states: a quiet card with a mint tile. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-empty {
+  padding: 52px 24px;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel .agency-empty {
+  box-shadow: none;
+  padding: 36px 24px 40px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-empty > svg {
+  box-sizing: content-box;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-empty h2,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-empty h3 {
+  margin: 16px 0 6px;
+  color: var(--portal-navy);
+  font-size: 17px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-empty p {
+  max-width: 360px;
+  color: var(--portal-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ================================================================ cards */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-prompt,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-settings {
+  border: 0;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-section-heading {
+  padding: 22px 24px 12px;
+  border-bottom: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-section-heading h2 {
+  font-size: 18px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-section-heading h2 span,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-count {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--portal-tint-2);
+  color: var(--portal-navy-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-section-heading button {
+  color: var(--portal-teal-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-work-list > button {
+  gap: 14px;
+  padding: 15px 24px;
+  border-bottom: 1px solid var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-work-list > button:hover {
+  background: var(--portal-tint-0);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-work-list strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-work-list small {
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-work-list > button > span:not(:first-child) {
+  font-size: 13.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-mini-icon {
+  border-radius: 12px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-task-circle {
+  border: 2px solid var(--portal-gray-2);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-overdue {
+  color: var(--portal-amber);
+  font-weight: 700;
+}
+
+/* Stat tiles: big number first, label under it. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics {
+  gap: 20px;
+  margin-bottom: 28px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics > button {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 26px;
+  border: 0;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+  transition: box-shadow 0.15s ease;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics > button:hover {
+  box-shadow: var(--portal-shadow-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics strong,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics .agency-money-metric {
+  order: -1;
+  margin: 0 0 6px;
+  color: var(--portal-navy);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics > button > span {
+  color: var(--portal-muted);
+  font-size: 15px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics > button > span svg {
+  color: var(--portal-icon);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics small {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* ================================================================ alerts + toast */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-alert {
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid #f3dcae;
+  border-radius: var(--portal-radius-sm);
+  background: #fff7e8;
+  color: #6b4100;
+  font-size: 14px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-alert button {
+  color: var(--portal-navy);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-save-message {
+  position: fixed;
+  z-index: 45;
+  left: 50%;
+  bottom: 24px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 12px 12px 12px 16px;
+  gap: 10px;
+  border-radius: 14px;
+  background: var(--portal-navy);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 18px 40px -12px rgba(var(--portal-shadow-rgb), 0.5);
+  transform: translateX(-50%);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-save-message > svg {
+  color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-save-message button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-save-message button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* ================================================================ role picker */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  justify-items: stretch;
+  gap: 0 14px;
+  width: min(480px, calc(100% - 32px));
+  min-height: 0;
+  margin: max(40px, 9vh) auto 64px;
+  padding: 36px 36px 30px;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(var(--portal-shadow-rgb), 0.04),
+    0 30px 70px -28px rgba(var(--portal-shadow-rgb), 0.28);
+  text-align: left;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > * {
+  grid-column: 1 / -1;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > .agency-mark {
+  grid-column: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--portal-navy);
+  color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > .agency-overline {
+  grid-column: 2;
+  margin: 0;
+  color: var(--portal-navy);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  text-transform: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > .agency-overline::first-letter {
+  text-transform: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap h1 {
+  margin: 30px 0 0;
+  color: var(--portal-navy);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > p {
+  max-width: none;
+  margin: 10px 0 0;
+  color: var(--portal-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > .agency-spin {
+  margin-top: 22px;
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-login-roles {
+  width: 100%;
+  gap: 10px;
+  margin-top: 24px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-login-roles button {
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 15px !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-login-roles button:not(.primary) svg {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap-demo {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap-demo .agency-button {
+  min-height: 54px;
+  border-color: var(--portal-cta);
+  border-radius: 12px;
+  background: var(--portal-cta);
+  color: var(--portal-navy);
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap-demo .agency-button:hover {
+  border-color: var(--portal-cta-hover);
+  background: var(--portal-cta-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap [role="alert"] {
+  color: var(--portal-danger);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap small {
+  margin-top: 18px;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap > a {
+  margin-top: 18px;
+  color: var(--portal-teal-ink);
+  font-weight: 700;
+}
+
+/* ================================================================ demo */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner {
+  padding: 10px 48px;
+  border-bottom: 0;
+  background: var(--portal-navy-deep);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner strong {
+  color: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner > span > svg {
+  color: var(--portal-cta);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner > div {
+  gap: 6px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner button {
+  padding: 5px 10px;
+  border-radius: 8px;
+  color: var(--portal-mint-2);
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* ================================================================ agency setup */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-notice {
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--portal-radius-sm);
+  background: var(--portal-canvas);
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-prompt {
+  gap: 14px;
+  padding: 18px 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-prompt > svg {
+  box-sizing: content-box;
+  flex-shrink: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-prompt p {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+
+/* ================================================================ forms */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form > label,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-pair > label,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form label,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-fields label,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-custom label,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-actions label {
+  color: var(--portal-navy);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form .agency-setup-check,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form .account-profile-check {
+  font-weight: 500;
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form input:not([type="checkbox"]),
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form select,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field input:not([type="checkbox"]),
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field select,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field textarea,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-revisions select,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form input:not([type="checkbox"]),
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form select,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form textarea,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-actions input,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-match-controls select {
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: var(--portal-navy);
+  font-size: 15px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field textarea,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form textarea {
+  line-height: 1.55;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form input:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-setup-form select:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field input:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field select:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field textarea:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form :is(input, select, textarea):focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-actions input:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog select:focus-visible,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select:focus-visible {
+  outline: 2px solid var(--portal-teal);
+  outline-offset: 0;
+  border-color: var(--portal-teal);
+  box-shadow: 0 0 0 4px rgba(var(--portal-accent-rgb), 0.16);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-grid {
+  gap: 18px 20px;
+  padding: 22px 28px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field {
+  gap: 7px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field > label,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field > span {
+  color: var(--portal-navy);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-field small {
+  color: var(--portal-muted);
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-checklist {
+  gap: 8px;
+  padding: 10px;
+  border-color: var(--portal-line-strong);
+  border-radius: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-checklist label {
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: var(--portal-canvas);
+  color: var(--portal-navy);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-edit-row > button {
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-note {
+  padding: 0 28px 18px;
+  color: var(--portal-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-error {
+  margin: 0 28px 20px;
+  padding: 14px 16px;
+  border: 1px solid #f2d3cc;
+  border-radius: var(--portal-radius-sm);
+  background: var(--portal-danger-soft);
+  color: var(--portal-danger);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-footer {
+  gap: 10px;
+  padding: 16px 28px;
+  border-top: 1px solid var(--portal-hairline);
+}
+
+/* ================================================================ dialogs */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-overlay {
+  background: rgba(var(--portal-overlay-rgb), 0.42);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog {
+  border-radius: 22px !important;
+  box-shadow: var(--shadow-raised);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-header {
+  padding: 28px 64px 16px 28px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-title,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog h2.ui-dialog-title {
+  color: var(--portal-navy);
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-description {
+  margin-top: 6px;
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-close {
+  top: 20px;
+  right: 20px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--portal-canvas);
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-close:hover {
+  background: var(--portal-band);
+  color: var(--portal-navy);
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog .agency-demo-actions {
+  padding: 0 28px 26px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-actions {
+  gap: 10px;
+  padding: 14px 28px;
+  border-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body {
+  padding: 22px 28px 28px;
+}
+/* Details read like the portal's: a small label over its value, two to a row. */
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body dl > div {
+  display: block;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body dt {
+  margin-bottom: 3px;
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body dd {
+  color: var(--portal-navy);
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-value-list {
+  padding-left: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-nested-values small {
+  color: var(--portal-muted);
+  font-size: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-revisions {
+  padding-top: 26px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-revisions h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-revisions p {
+  color: var(--portal-muted);
+  font-size: 13.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog.account-record-drawer {
+  border-left: 0;
+  border-radius: 22px 0 0 22px !important;
+  box-shadow: -30px 0 80px -20px rgba(var(--portal-shadow-rgb), 0.35);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-policy-history {
+  padding: 18px 28px;
+  border-color: var(--portal-hairline);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-policy-history li {
+  border-left-color: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-follow-up {
+  margin: 14px 28px;
+  padding: 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--portal-canvas);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-follow-up > .account-section-heading {
+  padding: 0 0 10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-follow-up > .account-relay-note,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-email-detail .account-relay-note {
+  padding: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-email-detail .account-relay-note {
+  margin-top: 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-email-detail {
+  padding: 0 28px 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-import-review,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-email-filing > form {
+  padding: 0 28px 22px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-import-rows,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-consolidation-comparison > div,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-workflow-steps > li {
+  border-color: var(--portal-line);
+  border-radius: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-add-menu {
+  padding: 6px;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(var(--portal-shadow-rgb), 0.05),
+    0 18px 44px -12px rgba(var(--portal-shadow-rgb), 0.28);
+  color: var(--portal-navy);
+  font-size: 14.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-add-menu [role="menuitem"] {
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-add-menu [data-highlighted] {
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+
+/* Renewal stepper, after the portal's risk tracker. */
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog .portal-stepper {
+  margin: 0 28px 18px;
+  padding: 16px 6px;
+  border-radius: 14px;
+  background: var(--portal-canvas);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  color: var(--portal-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li + li::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--portal-line-strong);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="done"] + li::before {
+  background: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--portal-line-strong);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="done"] {
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="done"] .portal-step-dot {
+  border-color: var(--portal-teal-bright);
+  background: var(--portal-teal-bright);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="current"] {
+  color: var(--portal-navy);
+  font-weight: 800;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="current"] .portal-step-dot {
+  border: 6px solid var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-attention] {
+  color: var(--portal-amber);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-attention] .portal-step-dot {
+  border-color: var(--portal-amber-dot);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="skipped"] .portal-step-dot {
+  border-color: var(--portal-line-strong);
+  background: var(--portal-line);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="lost"] {
+  color: var(--portal-navy);
+  font-weight: 800;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="lost"] .portal-step-dot {
+  border-color: var(--portal-gray-4);
+  background: var(--portal-gray-4);
+}
+
+/* ================================================================ My day */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-main:has(> .portal-greeting) {
+  display: flex;
+  flex-direction: column;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-page-header,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-metrics,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-home-columns {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting {
+  order: 1;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-setup-prompt,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-alert {
+  order: 2;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stats {
+  order: 3;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-work {
+  order: 4;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-reminder-queue {
+  order: 5;
+  margin: 28px 0 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting ~ .agency-get-started {
+  order: 6;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 26px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting h1 {
+  font-size: clamp(32px, 3vw, 40px);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting p {
+  margin-top: 6px;
+  color: var(--portal-muted);
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting .agency-button.primary {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 15px !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(270px, 1.2fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 26px 28px;
+  border: 1px solid transparent;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+  color: inherit;
+  text-align: left;
+  transition: box-shadow 0.15s ease;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat:hover {
+  box-shadow: var(--portal-shadow-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat strong {
+  color: var(--portal-navy);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat span {
+  margin-top: 8px;
+  color: var(--portal-navy-soft);
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat small {
+  margin-top: 2px;
+  color: var(--portal-muted);
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat[data-tone="you"] {
+  border-color: #f3d9a8;
+  background: linear-gradient(#fffaf0, #ffffff 70%);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat[data-tone="you"] strong {
+  color: #7a4d00;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team {
+  min-width: 0;
+  padding: 20px 22px;
+  border-radius: var(--portal-radius);
+  background: var(--portal-band);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team h2 {
+  font-size: 15.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team ul {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team .portal-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team .portal-avatar[data-tone="2"] {
+  background: var(--portal-cta);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team .portal-avatar[data-tone="0"] {
+  background: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team-who {
+  flex: 1;
+  min-width: 0;
+  color: rgba(var(--portal-ink-rgb), 0.78);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team-who strong {
+  display: block;
+  overflow: hidden;
+  color: var(--portal-navy);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team a {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-team a:hover {
+  background: var(--portal-navy);
+  color: #ffffff;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-toolbar .portal-tabs {
+  flex: 1 1 auto;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-scroll {
+  overflow-x: auto;
+  padding: 0 3px 4px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows {
+  width: 100%;
+  margin-top: -10px;
+  white-space: nowrap;
+  text-align: left;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td {
+  padding: 16px 18px;
+  height: 80px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:first-child {
+  width: 40%;
+  padding-left: 24px;
+  white-space: normal;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows th:first-child {
+  padding-left: 24px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:last-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows th:last-child {
+  width: 1%;
+  padding-inline: 20px;
+  text-align: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:last-child {
+  border-left: 1px solid var(--portal-hover);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-row-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--portal-navy);
+  font-size: 15.5px;
+  font-weight: 600;
+  text-align: left;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-row-title:hover {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-row-code {
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-due {
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-due[data-soon] {
+  color: var(--portal-amber);
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 24px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-empty > svg {
+  box-sizing: content-box;
+  flex-shrink: 0;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-empty strong,
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-empty span {
+  display: block;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows-empty span {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-more button {
+  height: 42px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 21px;
+  background: var(--portal-band);
+  color: var(--portal-navy);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-more button:hover {
+  background: var(--portal-tint-8);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started {
+  gap: 18px;
+  margin-top: 28px;
+  padding: 24px 26px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started > .agency-mini-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--portal-mint);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started p {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+
+/* ================================================================ account */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .account-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px 24px;
+  margin-bottom: 22px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-identity {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-heading-actions {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  gap: 10px;
+  padding-top: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-heading-actions .agency-button {
+  min-height: 44px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-workspace h1 {
+  font-size: clamp(28px, 2.7vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-identity > div {
+  gap: 10px 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-identity .account-badge {
+  padding: 0;
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-identity p {
+  margin-top: 8px;
+  color: var(--portal-muted);
+  font-size: 15.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 8px 8px 8px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-text {
+  min-width: 0;
+  margin-right: 6px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-text strong {
+  display: block;
+  color: var(--portal-navy);
+  font-size: 15px;
+  line-height: 1.3;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-text span {
+  display: block;
+  overflow: hidden;
+  color: var(--portal-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-icon:hover {
+  background: var(--portal-canvas);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-message {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 7px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  color: var(--portal-navy);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-message:hover {
+  background: var(--portal-canvas);
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-track {
+  margin-bottom: 20px;
+  padding: 20px 24px 22px;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-track-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-track-head > div {
+  min-width: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-track-head strong {
+  display: block;
+  font-size: 16.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .portal-track-head span {
+  display: block;
+  margin-top: 2px;
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 0;
+  border: 0;
+}
+/* Each fact reads like a stat tile: icon tile, value, then its label. */
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span:first-child,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span:last-child {
+  position: relative;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  min-height: 80px;
+  padding: 14px 16px 14px 72px;
+  border: 0;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band svg {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  transform: translateY(-50%);
+  padding: 9px;
+  border-radius: 12px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band strong {
+  order: -1;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--portal-navy);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band small {
+  font-size: 12.5px;
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .account-layout {
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-main-column,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-context-column {
+  gap: 20px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-bar {
+  gap: 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-bar .agency-search {
+  width: auto;
+  min-height: 48px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: var(--portal-band);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-bar .agency-search:focus-within {
+  border-color: var(--portal-teal);
+  background: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-bar input {
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section-heading {
+  padding: 20px 24px 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section-heading h2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section .agency-button {
+  min-height: 36px;
+  padding: 0 13px;
+  border-color: var(--portal-line-strong);
+  font-size: 13.5px !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section select,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer select {
+  min-height: 36px;
+  border-color: var(--portal-line-strong);
+  border-radius: 9px;
+  color: var(--portal-navy);
+  font-size: 13.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section-caption {
+  color: var(--portal-muted);
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-empty,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-relay-note {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-empty {
+  padding: 4px 24px 22px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-relay-note {
+  padding: 4px 24px 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-show-more {
+  padding: 13px;
+  border-top-color: var(--portal-hairline);
+  color: var(--portal-teal-ink);
+  font-size: 13.5px !important;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-section-footer {
+  padding: 12px 24px 14px;
+  border-top-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-list,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-results,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline {
+  padding-inline: 24px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-list {
+  padding-bottom: 10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-list > li {
+  min-height: 68px;
+  border-top-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open {
+  grid-template-columns: minmax(110px, 1fr) 128px 120px 16px;
+  gap: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open small {
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open > svg {
+  color: var(--portal-icon);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-due {
+  width: fit-content;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--portal-sky-soft);
+  color: var(--portal-sky);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-due.due-now {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--portal-amber-soft);
+  color: var(--portal-amber);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-row-owner {
+  border-left-color: var(--portal-line);
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-row-symbol,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-complete-button {
+  color: var(--portal-gray-3);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-complete-button:hover {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-task-undo {
+  margin: 0 24px 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--portal-mint);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-table-scroll {
+  padding: 0 16px 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table {
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-workspace .account-coverage-table th {
+  padding: 12px 12px;
+  background: var(--portal-band);
+  color: var(--portal-navy-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-workspace .account-coverage-table td {
+  padding: 16px 12px;
+  border-bottom-color: var(--portal-hairline);
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table small {
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-money {
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-policy-warning {
+  color: var(--portal-amber) !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open:hover strong,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-coverage-table button:hover strong,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-person-name:hover {
+  color: var(--portal-teal);
+}
+
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people li {
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people li > svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  margin-top: 0;
+  padding: 9px;
+  border-radius: 50%;
+  background: var(--portal-mint-3);
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-person-name {
+  color: var(--portal-navy);
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people p {
+  color: var(--portal-muted);
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people a {
+  gap: 7px;
+  margin-top: 6px;
+  color: var(--portal-navy-soft);
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-people a svg {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list {
+  padding: 0 24px 12px;
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 11px 0;
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list dt {
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list dd {
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list a {
+  color: var(--portal-teal-ink);
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-tags {
+  padding: 0 24px 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-tags span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-background {
+  padding: 0 24px 18px;
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-background summary {
+  color: var(--portal-teal-ink);
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list li,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list li {
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list li > svg,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list li > svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--portal-canvas);
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list strong,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list strong {
+  color: var(--portal-navy);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list small,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list small {
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer {
+  margin: 0 24px 10px;
+  padding: 12px 14px;
+  border-color: var(--portal-line-strong);
+  border-radius: 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer:focus-within {
+  border-color: var(--portal-teal);
+  box-shadow: 0 0 0 3px rgba(var(--portal-accent-rgb), 0.14);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer textarea {
+  color: var(--portal-navy);
+  font-size: 15px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer textarea::placeholder {
+  color: var(--portal-gray-6);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer > div > span {
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer .agency-button.primary {
+  background: var(--portal-navy);
+  border-color: var(--portal-navy);
+  color: #ffffff;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline > li {
+  gap: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline > li:not(:last-child)::before {
+  left: 16px;
+  top: 44px;
+  background: var(--portal-line);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-activity-title {
+  color: var(--portal-navy);
+  font-size: 14.5px !important;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-activity-title:hover {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline small {
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-grid {
+  gap: 16px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary {
+  padding-right: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary > button:first-child {
+  padding: 16px 18px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary > button:first-child > span {
+  color: var(--portal-navy);
+  font-size: 15px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary strong {
+  color: var(--portal-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary strong small {
+  font-size: 13px;
+  font-weight: 500;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-related-summary > button:first-child > svg {
+  top: 22px;
+  color: var(--portal-icon);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-finance-summary {
+  gap: 4px 24px;
+  padding: 0 24px 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-finance-summary button {
+  padding: 12px 0;
+  border-top-color: var(--portal-hairline);
+  color: var(--portal-navy);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-finance-summary svg {
+  color: var(--portal-icon);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-results li {
+  border-top-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-search-results strong {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-result-type {
+  color: var(--portal-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile > header {
+  padding: 22px 24px 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile > header p,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-help,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-empty,
+html:is([data-theme="portal"], [data-theme="brand"]) .account-retained > p {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-grid {
+  gap: 22px 28px;
+  padding: 22px 24px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-heading h3 {
+  color: var(--portal-navy);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-heading h3 svg {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile li {
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-profile li strong {
+  font-size: 14.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-retained {
+  margin: 0 24px 20px;
+  border-top-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-list {
+  padding: 0 24px 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-queue > .account-text-button {
+  margin: 0 24px 18px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-row {
+  border-top-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-row p {
+  color: var(--portal-muted);
+  font-size: 13.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-queue h2 svg {
+  color: var(--portal-teal);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-relay-list article {
+  padding: 16px 24px;
+  border-top-color: var(--portal-hairline);
+  font-size: 14.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .account-relay-controls {
+  padding: 12px 24px;
+  font-size: 13.5px;
+}
+
+/* ================================================================ audit, reports, settings */
+
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-filter {
+  gap: 12px;
+  margin-bottom: 18px;
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list {
+  padding: 6px 26px;
+  border-radius: var(--portal-radius);
+  background: #ffffff;
+  box-shadow: var(--portal-shadow);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list:empty {
+  display: none;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list article {
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list article:last-child {
+  border-bottom: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-dot {
+  width: 36px;
+  height: 36px;
+  background: var(--portal-mint);
+  color: var(--portal-teal-ink);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list strong {
+  color: var(--portal-navy);
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list strong span {
+  color: var(--portal-muted);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list p {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list small {
+  font-size: 12.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list blockquote {
+  border-left: 3px solid var(--portal-teal-bright);
+  color: var(--portal-navy-soft);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list + .agency-button {
+  margin-top: 18px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-report-quality {
+  margin-top: 22px;
+  padding: 24px 26px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-report-quality p {
+  color: var(--portal-muted);
+  font-size: 14.5px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel .agency-table-scroll {
+  padding: 0 21px 12px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel table {
+  margin-top: -10px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel td {
+  box-shadow: inset 0 -1px 0 var(--portal-hairline);
+  border-radius: 0 !important;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-producer-report .agency-form-note,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-panel .agency-form-note {
+  padding: 4px 24px 22px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-settings {
+  max-width: 980px;
+  padding: 30px 32px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-settings > h2 {
+  margin-top: 34px;
+  font-size: 19px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-settings > h2:first-child {
+  margin-top: 0;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-settings > p {
+  color: var(--portal-muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-team-list > div {
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom-color: var(--portal-hairline);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-team-list strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-team-list small {
+  font-size: 13px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand-options > button {
+  border-color: var(--portal-line);
+  border-radius: 14px;
+  color: var(--portal-navy-soft);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand-options > button[aria-pressed="true"] {
+  border-color: var(--portal-teal);
+  background: var(--portal-mint);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand-options strong {
+  color: var(--portal-navy);
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-statement-review > p,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-statement-review article p,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-import-review > p {
+  color: var(--portal-muted);
+  font-size: 14px;
+}
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-statement-review article small {
+  color: var(--portal-teal-ink);
+}
+
+/* ================================================================ responsive */
+
+@media (min-width: 1500px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar {
+    width: 272px;
+  }
+}
+@media (max-height: 900px) and (min-width: 781px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand {
+    height: 76px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-org {
+    margin-top: 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav button {
+    min-height: 40px;
+  }
+}
+@media (max-width: 1280px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-team {
+    grid-column: 1 / -1;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-team ul {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-layout {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open {
+    grid-template-columns: minmax(100px, 1fr) 118px 16px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-top-role {
+    display: none;
+  }
+}
+@media (max-width: 1150px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar {
+    width: 232px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand {
+    padding: 0 22px;
+    font-size: 24px !important;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav {
+    padding: 10px 12px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-org {
+    margin-inline: 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar-bottom {
+    padding-inline: 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-main,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-main:has(.account-workspace) {
+    padding: 10px 28px 48px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-workspace-footer {
+    padding-inline: 28px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics {
+    gap: 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-text {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip {
+    padding: 5px 10px 5px 5px;
+  }
+  
+}
+@media (max-width: 1030px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-identity {
+    grid-row: auto;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-person {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-heading-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open {
+    grid-template-columns: minmax(100px, 1fr) 120px 110px 16px;
+  }
+}
+@media (max-width: 900px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1280px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .portal-status-tabs {
+    flex-basis: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .agency-search {
+    flex: 1 1 260px;
+    width: auto;
+  }
+}
+@media (min-width: 1101px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(5) {
+    white-space: nowrap;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory .account-directory-next strong {
+    max-width: 210px;
+  }
+}
+/* Medium widths: each row becomes a two-line card instead of scrolling sideways. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records table,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records tbody {
+    display: block;
+    margin-top: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records thead {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
+    grid-template-areas:
+      "title title status open"
+      "account owner date open";
+    align-items: center;
+    gap: 6px 18px;
+    margin-bottom: 10px;
+    padding: 16px 18px 16px 20px;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: var(--portal-shadow);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:first-child,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child {
+    display: block;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--portal-navy-soft);
+    font-size: 14px;
+    white-space: normal;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(1) {
+    grid-area: open;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(2) {
+    grid-area: status;
+    justify-self: end;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(3) {
+    grid-area: date;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(4) {
+    grid-area: owner;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:nth-last-child(5) {
+    grid-area: account;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:first-child {
+    grid-area: title;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory tbody tr {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      "account account status open"
+      "coverage next manager open";
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory tbody tr:has(.account-directory-checkbox) {
+    grid-template-columns: 28px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check account account status open"
+      "check coverage next manager open";
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(2) {
+    grid-area: status;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(3) {
+    grid-area: manager;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(4) {
+    grid-area: next;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(5) {
+    grid-area: coverage;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td:nth-last-child(6) {
+    grid-area: account;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory td.account-directory-checkbox {
+    grid-area: check;
+    width: auto;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox + td {
+    min-width: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory .account-directory-next strong {
+    max-width: 100%;
+  }
+}
+/* Below 1100px the directory keeps "select visible accounts" in a slim header bar. */
+@media (max-width: 1100px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records.account-directory thead {
+    display: block;
+    margin-bottom: 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records.account-directory thead:not(:has(.account-directory-checkbox)) {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory thead tr {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: var(--portal-band);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory thead th {
+    display: none;
+    padding: 0;
+    background: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory thead th.account-directory-checkbox,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory thead th.account-directory-checkbox + th {
+    display: block;
+    width: auto;
+  }
+}
+
+/* Phones: the sidebar becomes a top bar with a menu drawer. */
+@media (max-width: 780px) {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--portal-tint-5);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand {
+    flex: 1;
+    width: auto;
+    height: 62px;
+    padding: 0 16px;
+    border-bottom: 0;
+    font-size: 23px !important;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-brand .agency-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-menu-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-right: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--portal-canvas);
+    color: var(--portal-navy);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar nav,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-org,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-sidebar-bottom {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: min(304px, 86vw);
+    height: 100dvh;
+    overflow-y: auto;
+    border-bottom: 0;
+    box-shadow: 0 0 0 100vmax rgba(var(--portal-overlay-rgb), 0.42);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-body {
+    margin-top: 63px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-brand {
+    flex: none;
+    width: 100%;
+    border-bottom: 1px solid var(--portal-hover);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .portal-menu-button {
+    position: absolute;
+    top: 9px;
+    right: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-org {
+    display: flex;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-sidebar nav {
+    display: flex;
+    flex-direction: column;
+    margin-top: 4px;
+    overflow: visible;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-sidebar nav button {
+    min-height: 46px;
+    padding: 0 14px;
+    gap: 14px;
+    font-size: 15.5px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-sidebar nav button svg {
+    width: 19px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"])[data-portal-nav="open"] .agency-sidebar-bottom {
+    display: block;
+    margin-top: auto;
+    padding-bottom: 6px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar {
+    min-height: 0;
+    padding: 14px 16px 2px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar > div {
+    font-size: 13.5px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-topbar > div:first-child {
+    flex: 1;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-live {
+    padding: 6px;
+    font-size: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-live i {
+    margin: 0 1px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-bell {
+    width: 40px;
+    height: 40px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip {
+    padding: 3px;
+    border-radius: 50%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip > svg {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-user-chip .portal-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner {
+    padding: 10px 16px;
+    font-size: 13.5px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-demo-banner > div {
+    gap: 2px;
+    margin-left: -10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-main,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-main:has(.account-workspace) {
+    padding: 8px 16px 40px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-workspace-footer {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 14px 16px 80px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1 {
+    font-size: 28px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-page-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .portal-status-tabs {
+    flex-basis: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar .agency-search,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-search {
+    width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-table-toolbar > .agency-button {
+    flex: 1;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-save-message {
+    bottom: 72px;
+    width: max-content;
+  }
+  
+  
+  
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-get-started > .agency-button {
+    margin-left: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-bootstrap {
+    padding: 28px 22px 24px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .ui-dialog-header {
+    padding: 22px 60px 14px 20px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-actions,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-detail-body,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-footer {
+    padding-inline: 20px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-form-grid {
+    padding: 18px 20px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog .portal-stepper {
+    margin-inline: 20px;
+  }
+}
+@media (max-width: 640px) {
+  /* Row cards stack: title first, the action on the right. */
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records table,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records tbody,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows tbody {
+    display: block;
+    margin-top: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records thead,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows thead {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records tbody tr,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3px 12px;
+    margin-bottom: 10px;
+    padding: 14px 14px 14px 16px;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: var(--portal-shadow);
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:first-child {
+    display: block;
+    grid-column: 1;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--portal-navy-soft);
+    font-size: 14px;
+    white-space: normal;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:last-child {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    padding: 0;
+    border-left: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td.account-directory-checkbox + td {
+    min-width: 0;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-directory .account-directory-next strong {
+    max-width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records tr:has(.account-directory-checkbox) td:last-child {
+    grid-row: 2 / span 5;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records .agency-record-link .agency-avatar {
+    width: 34px;
+    height: 34px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child .agency-icon-button,
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows .portal-pill {
+    min-width: 0;
+    height: 36px;
+    padding: 0 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-records td:last-child .agency-icon-button svg {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:nth-child(2),
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-rows td:nth-child(4) {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat {
+    padding: 16px 14px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat strong {
+    font-size: 22px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat span {
+    margin-top: 4px;
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stat small {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-greeting h1 {
+    font-size: 30px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-workspace h1 {
+    font-size: 27px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-heading-actions {
+    width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-heading-actions > * {
+    flex: 1;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-person {
+    width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-person-text {
+    flex: 1;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li {
+    font-size: 11.5px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li:not([data-state="current"]):not([data-state="lost"]) .portal-step-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-stepper li[data-state="current"] .portal-step-label {
+    white-space: nowrap;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-track {
+    padding: 18px 16px 20px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .portal-track-head .portal-pill {
+    width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band {
+    gap: 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span:first-child,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band > span:last-child {
+    min-height: 0;
+    padding: 13px 14px;
+    font-size: 12.5px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band svg {
+    display: none;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-fact-band strong {
+    font-size: 15px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-section-heading {
+    padding: 16px 16px 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-section-heading .account-profile-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px 16px;
+    width: 100%;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-list,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-people,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-file-list,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-exposure-list,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-search-results,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-timeline,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-facts-list,
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-list {
+    padding-inline: 16px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-attention-open {
+    grid-template-columns: minmax(70px, 1fr) auto 12px;
+    gap: 8px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-due {
+    font-size: 12px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-note-composer {
+    margin-inline: 16px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-table-scroll {
+    padding-inline: 10px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-empty,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-relay-note {
+    padding-inline: 16px;
+  }
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-profile > header,
+  html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-grid {
+    padding-inline: 16px;
+  }
+  
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-audit-list {
+    padding: 4px 18px;
+  }
+}

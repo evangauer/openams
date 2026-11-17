@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAMS brand sheet</title>
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<!-- This sheet loads the fonts from Google Fonts for convenience; the app self-hosts them. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--color-bg); color: var(--color-ink); font: 15px/1.55 var(--font-body); }
+  .sheet { max-width: 1120px; margin: 0 auto; padding: 48px 32px 64px; display: grid; gap: 56px; }
+  h1 { font-size: 40px; font-weight: 600; letter-spacing: var(--tracking-display); line-height: 1.05; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-ink-subtle); margin-bottom: 16px; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  p.lead { font-size: 19px; color: var(--color-ink-muted); max-width: 680px; margin-top: 12px; }
+  .mono { font-family: var(--font-mono); font-size: 12.5px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .tile { border-radius: var(--radius-card); padding: 24px; display: flex; align-items: center; justify-content: center; min-height: 140px; }
+  .tile.col { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px; }
+  .light { background: #fff; box-shadow: var(--shadow-card); }
+  .bone { background: var(--oams-bone); box-shadow: 0 0 0 1px var(--oams-stone); }
+  .dark { background: var(--oams-graphite); color: var(--oams-bone); }
+  .cap { font-size: 12.5px; color: var(--color-ink-subtle); margin-top: 8px; }
+  .dark .cap { color: var(--oams-ash); }
+  figure img { display: block; max-width: 100%; }
+  .sizes { display: flex; align-items: flex-end; gap: 18px; }
+  .clear { position: relative; padding: 22px; outline: 1.5px dashed var(--color-clay); outline-offset: -1px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .swatch { border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-card); background: var(--color-surface); }
+  .swatch i { display: block; height: 72px; }
+  .swatch div { padding: 10px 12px; font-size: 13px; }
+  .swatch b { display: block; font-weight: 600; }
+  .type-display { font-size: 56px; font-weight: 600; letter-spacing: var(--tracking-display); line-height: 1; }
+  .type-body { font-size: 17px; max-width: 520px; color: var(--color-ink-muted); }
+  .ui { border-radius: var(--radius-card); padding: 24px; background: var(--color-bg); color: var(--color-ink); box-shadow: 0 0 0 1px var(--color-border); display: grid; gap: 14px; }
+  .ui .card { background: var(--color-surface); border-radius: 10px; padding: 16px; box-shadow: var(--shadow-card); display: grid; gap: 10px; }
+  .btn { font: 600 14px var(--font-body); border: 0; border-radius: var(--radius-input); padding: 9px 14px; cursor: pointer; }
+  .btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+  .btn.secondary { background: var(--color-surface-inverse); color: var(--color-ink-inverse); }
+  .btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: var(--radius-chip); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  a { color: var(--color-link); text-underline-offset: 3px; }
+  .meta { color: var(--color-ink-subtle); font-size: 13px; }
+  .accent-ink { color: var(--color-accent-ink); font-weight: 600; }
+  .circle { border-radius: 50%; }
+  footer { font-size: 13px; color: var(--color-ink-subtle); border-top: 1px solid var(--color-border); padding-top: 20px; }
+  @media (max-width: 760px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="sheet">
+
+<header>
+  <img src="logo/openams-lockup-horizontal.svg" alt="OpenAMS" height="56">
+  <h1 style="margin-top:28px">Agency management you own.</h1>
+  <p class="lead">The open-source agency management system for independent P&amp;C agencies. The brand is an open door with the lights on: walk in free, leave with every record. Usage rules are in <a href="BRAND.md">BRAND.md</a>.</p>
+</header>
+
+<section>
+  <h2>Mark</h2>
+  <div class="grid g4">
+    <figure class="tile light"><div class="sizes"><img src="logo/openams-mark.svg" width="96" alt="Mark"><img src="logo/openams-mark.svg" width="32" alt=""><img src="logo/openams-mark.svg" width="16" alt=""></div></figure>
+    <figure class="tile dark"><div class="sizes"><img src="logo/openams-mark-inverse.svg" width="96" alt="Inverse mark"><img src="logo/openams-mark-inverse.svg" width="32" alt=""><img src="logo/openams-mark-inverse.svg" width="16" alt=""></div></figure>
+    <figure class="tile light"><div class="sizes"><img src="logo/openams-mark-mono-black.svg" width="96" alt="One-color mark"><img src="logo/openams-glyph.svg" width="96" alt="Glyph"></div></figure>
+    <figure class="tile dark"><div class="sizes"><img src="logo/openams-mark-mono-white.svg" width="96" alt="One-color mark, white"><img src="logo/openams-glyph-inverse.svg" width="96" alt="Glyph, inverse"></div></figure>
+  </div>
+  <p class="cap">Dark square on light backgrounds, bone square on dark. One-color and square-less glyph versions on the right. Works down to 16 px.</p>
+</section>
+
+<section>
+  <h2>Lockups</h2>
+  <div class="grid g2">
+    <figure class="tile light"><img src="logo/openams-lockup-horizontal.svg" height="56" alt="Horizontal lockup"></figure>
+    <figure class="tile dark"><img src="logo/openams-lockup-horizontal-inverse.svg" height="56" alt="Horizontal lockup, inverse"></figure>
+    <figure class="tile light"><img src="logo/openams-lockup-horizontal-mono-black.svg" height="56" alt="Horizontal lockup, one color"></figure>
+    <figure class="tile dark"><img src="logo/openams-lockup-horizontal-mono-white.svg" height="56" alt="Horizontal lockup, one color white"></figure>
+  </div>
+  <div class="grid g4" style="margin-top:16px">
+    <figure class="tile light"><img src="logo/openams-lockup-stacked.svg" height="110" alt="Stacked lockup"></figure>
+    <figure class="tile dark"><img src="logo/openams-lockup-stacked-inverse.svg" height="110" alt="Stacked lockup, inverse"></figure>
+    <figure class="tile light"><img src="logo/openams-lockup-stacked-mono-black.svg" height="110" alt="Stacked lockup, one color"></figure>
+    <figure class="tile bone"><div class="clear"><img src="logo/openams-mark.svg" width="88" alt="Clear space"></div></figure>
+  </div>
+  <p class="cap">Last tile: clear space is one quarter of the mark's height on every side.</p>
+</section>
+
+<section>
+  <h2>Color</h2>
+  <div class="swatches">
+    <div class="swatch"><i style="background:#16181D"></i><div><b>Graphite</b><span class="mono">#16181D</span></div></div>
+    <div class="swatch"><i style="background:#2A2D34"></i><div><b>Graphite 700</b><span class="mono">#2A2D34</span></div></div>
+    <div class="swatch"><i style="background:#5B6170"></i><div><b>Slate</b><span class="mono">#5B6170</span></div></div>
+    <div class="swatch"><i style="background:#E6E3DC"></i><div><b>Stone</b><span class="mono">#E6E3DC</span></div></div>
+    <div class="swatch"><i style="background:#F6F5F1;box-shadow:inset 0 -1px #E6E3DC"></i><div><b>Bone</b><span class="mono">#F6F5F1</span></div></div>
+    <div class="swatch"><i style="background:#F7CC2E"></i><div><b>Saffron</b><span class="mono">#F7CC2E</span></div></div>
+    <div class="swatch"><i style="background:#6B5000"></i><div><b>Amber ink</b><span class="mono">#6B5000</span></div></div>
+    <div class="swatch"><i style="background:#A7553C"></i><div><b>Clay</b><span class="mono">#A7553C</span></div></div>
+    <div class="swatch"><i style="background:linear-gradient(180deg,rgb(167 85 60/.75),rgb(167 85 60/.12)),#F6F5F1"></i><div><b>Glow</b><span class="mono">clay 75% → 12%</span></div></div>
+    <div class="swatch"><i style="background:#2E5A88"></i><div><b>Denim</b><span class="mono">#2E5A88</span></div></div>
+  </div>
+  <p class="cap">Graphite and bone carry the surfaces. Saffron is the light. Clay is the glow and the Relay connection. Denim is for links and information. Every text pair passes WCAG AA; see the table in BRAND.md.</p>
+</section>
+
+<section>
+  <h2>Tokens in use, light and dark</h2>
+  <div class="grid g2">
+    <div class="ui" data-theme="light">
+      <div class="card">
+        <span class="meta">Harbor &amp; Pine Construction · <span class="mono">GL-4471-02</span></span>
+        <h3 style="margin:0">General liability renews Dec 4</h3>
+        <div class="row"><span class="chip" style="background:var(--color-success-soft);color:var(--color-success)">✓ Active</span><span class="chip" style="background:var(--color-warning-soft);color:var(--color-warning)">! Remarketing</span><span class="chip" style="background:var(--color-danger-soft);color:var(--color-danger)">× Lapsed</span><span class="chip" style="background:var(--color-clay-soft);color:var(--color-clay)">Works with Relay</span></div>
+        <p class="meta">Owner Alex Morgan. <a href="#">Open the renewal</a> or see <span class="accent-ink">3 open tasks</span>.</p>
+        <div class="row"><button class="btn primary">Start renewal</button><button class="btn secondary">Add task</button></div>
+      </div>
+    </div>
+    <div class="ui" data-theme="dark">
+      <div class="card">
+        <span class="meta">Harbor &amp; Pine Construction · <span class="mono">GL-4471-02</span></span>
+        <h3 style="margin:0">General liability renews Dec 4</h3>
+        <div class="row"><span class="chip" style="background:var(--color-success-soft);color:var(--color-success)">✓ Active</span><span class="chip" style="background:var(--color-warning-soft);color:var(--color-warning)">! Remarketing</span><span class="chip" style="background:var(--color-danger-soft);color:var(--color-danger)">× Lapsed</span><span class="chip" style="background:var(--color-clay-soft);color:var(--color-clay)">Works with Relay</span></div>
+        <p class="meta">Owner Alex Morgan. <a href="#">Open the renewal</a> or see <span class="accent-ink">3 open tasks</span>.</p>
+        <div class="row"><button class="btn primary">Start renewal</button><button class="btn secondary">Add task</button></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Both cards use the same markup; <span class="mono">data-theme</span> switches every token through <span class="mono">light-dark()</span>.</p>
+</section>
+
+<section>
+  <h2>Type</h2>
+  <div class="grid g2">
+    <div class="tile light col">
+      <div class="type-display">Every renewal, on time.</div>
+      <p class="cap">Instrument Sans SemiBold · display and headings · SIL OFL 1.1</p>
+    </div>
+    <div class="tile light col">
+      <p class="type-body">Accounts, policies, renewals, servicing and commissions in one calm place. A new CSR is productive on day one.</p>
+      <p class="mono" style="color:var(--color-ink)">CA-0451-09 · $11,940.00 · GET /v1/policies</p>
+      <p class="cap">Instrument Sans Regular for text · JetBrains Mono for numbers and IDs · both SIL OFL 1.1</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Icons</h2>
+  <div class="grid g4">
+    <figure class="tile light"><div class="sizes"><img src="icons/favicon.svg" width="32" alt="favicon.svg"><img src="icons/favicon.ico" width="16" alt="favicon.ico"></div></figure>
+    <figure class="tile light"><img src="icons/apple-touch-icon.png" width="90" style="border-radius:20px" alt="Apple touch icon"></figure>
+    <figure class="tile light"><img src="icons/icon-512.png" width="90" alt="512 icon"></figure>
+    <figure class="tile light"><img src="icons/icon-maskable-512.png" width="90" class="circle" alt="Maskable icon, circle mask"></figure>
+  </div>
+  <p class="cap">favicon.svg and .ico · apple-touch-icon (180) · icon-192 and -512 · maskable 512 shown under a circle mask.</p>
+</section>
+
+<section>
+  <h2>README header</h2>
+  <div class="grid g2">
+    <figure><img src="readme/header-dark.svg" alt="README header, dark"><p class="cap">README header, used on GitHub's light and dark themes</p></figure>
+    <figure><img src="readme/header-light.svg" alt="README header, light"><p class="cap">Light variant, for light pages outside GitHub</p></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Social</h2>
+  <div class="grid g2">
+    <figure><img src="social/github-social-preview.png" alt="GitHub social preview" style="border-radius:12px"><p class="cap">GitHub social preview · 1280×640</p></figure>
+    <figure><img src="social/og-image.png" alt="OG image" style="border-radius:12px"><p class="cap">Default OG image · 1200×630 · per-page template in social/og-template.svg</p></figure>
+  </div>
+  <div class="grid g3" style="margin-top:16px;grid-template-columns:1fr 3fr">
+    <figure><img src="social/avatar.png" width="140" class="circle" alt="Avatar"><p class="cap">Avatar for X and LinkedIn · 400×400</p></figure>
+    <figure><img src="social/x-banner.png" alt="X banner" style="border-radius:12px"><p class="cap">X banner · 1500×500</p></figure>
+  </div>
+  <figure style="margin-top:16px"><img src="social/linkedin-banner.png" alt="LinkedIn banner" style="border-radius:8px"><p class="cap">LinkedIn banner · 1128×191</p></figure>
+</section>
+
+<section>
+  <h2>Sundown scenes</h2>
+  <figure><img src="scenes/hero-band.png" alt="Hero band" style="width:100%;image-rendering:pixelated;border-radius:12px"></figure>
+  <div class="grid g3" style="margin-top:16px;grid-template-columns:1fr 1fr 1fr">
+    <figure><img src="scenes/vignette.png" alt="Lone door vignette" style="width:100%;image-rendering:pixelated;border-radius:12px"><p class="cap">vignette · 160×120</p></figure>
+    <figure><img src="scenes/lost.png" alt="404 scene" style="width:100%;image-rendering:pixelated;border-radius:12px"><p class="cap">lost (404) · 128×80</p></figure>
+    <figure><img src="scenes/page-band.png" alt="Page band" style="width:100%;image-rendering:pixelated;border-radius:8px"><img src="scenes/footer-strip.png" alt="Footer strip" style="width:100%;image-rendering:pixelated;border-radius:8px;margin-top:12px"><p class="cap">page-band · 400×56 and footer-strip · 400×64</p></figure>
+    <figure><img src="scenes/footer-town.png" alt="Western town" style="width:100%;image-rendering:pixelated;border-radius:8px"><img src="scenes/footer-sea.png" alt="Sea floor" style="width:100%;image-rendering:pixelated;border-radius:8px;margin-top:12px"><img src="scenes/footer-space.png" alt="The moon" style="width:100%;image-rendering:pixelated;border-radius:8px;margin-top:12px"><p class="cap">Through the footer's door: footer-town, footer-sea, footer-space · 400×64</p></figure>
+  </div>
+  <p class="cap">Drawn from code in scripts/scenes.mjs. Scale by whole numbers with image-rendering: pixelated; text never sits on a scene.</p>
+</section>
+
+<section>
+  <h2>Works with Relay</h2>
+  <div class="grid g2">
+    <figure class="tile light"><img src="badges/works-with-relay.svg" height="40" alt="Works with Relay"></figure>
+    <figure class="tile dark"><img src="badges/works-with-relay-inverse.svg" height="40" alt="Works with Relay, inverse"></figure>
+  </div>
+  <p class="cap">OpenAMS works fully without Relay. The badge follows the OpenAMS identity and never outweighs it.</p>
+</section>
+
+<footer>
+  Instrument Sans: SIL Open Font License 1.1, Copyright 2022 The Instrument Sans Project Authors.
+  JetBrains Mono: SIL Open Font License 1.1, Copyright 2020 The JetBrains Mono Project Authors.
+  Assets are generated by <span class="mono">brand/scripts/build-assets.mjs</span>.
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.next/
+out/
+dist/
+*.tsbuildinfo
+.turbo/
+
+# Environment and local state
+.env
+.env.*
+!.env.example
+.local/
+.vercel
+
+# Maintainer-only release denylist (real names must never be tracked)
+.oss-denylist
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Next.js generated type reference
+next-env.d.ts
+
+# Firebase: project aliases and local emulator/debug output stay local
+.firebaserc
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+*-debug.log
+apphosting.local.yaml
+apphosting.emulator.yaml
+
+# Claude Code worktrees
+.claude/worktrees/

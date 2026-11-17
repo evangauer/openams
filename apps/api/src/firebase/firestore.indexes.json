@@ -1,0 +1,60 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "chat_messages",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "chat_receipts",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "chat_threads",
+      "fieldPath": "last",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "records",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "revisions",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "receipts",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audit",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailbox_connections",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailbox_messages",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailbox_events",
+      "fieldPath": "value",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mailbox_authorizations",
+      "fieldPath": "value",
+      "indexes": []
+    }
+  ]
+}

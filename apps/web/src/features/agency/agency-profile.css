@@ -1,0 +1,82 @@
+/* Agency details form (Settings) and the My day prompt to save them. */
+.agency-setup-form {
+  display: grid;
+  gap: 19px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.agency-setup-form > label,
+.agency-setup-pair > label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+}
+.agency-setup-form input:not([type="checkbox"]),
+.agency-setup-form select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d8dfd8;
+  border-radius: 8px;
+  background: white;
+  padding: 11px 12px;
+  font: inherit;
+  color: var(--color-ink);
+}
+.agency-setup-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.agency-setup-form .agency-setup-check {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.agency-setup-check input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.agency-setup-form > button {
+  justify-self: start;
+}
+.agency-setup-notice {
+  padding: 13px 15px;
+  border: 1px solid var(--agency-line);
+  border-radius: 9px;
+  background: #f6f8f5;
+  color: #546158;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.agency-setup-prompt {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 18px;
+  margin-bottom: 22px;
+  border: 1px solid var(--agency-line);
+  background: white;
+  border-radius: 10px;
+}
+.agency-setup-prompt > div {
+  flex: 1;
+}
+.agency-setup-prompt p {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .agency-setup-pair {
+    grid-template-columns: 1fr;
+  }
+  .agency-setup-prompt {
+    flex-wrap: wrap;
+  }
+}

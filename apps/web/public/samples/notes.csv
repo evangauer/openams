@@ -1,0 +1,4 @@
+external_id,account_external_id,source_created_at,source_author,policy_number,policy_carrier,policy_effective_date,body,category,occurred_at
+nt-1001,acct-1002,2026-10-21T15:00:00Z,Previous AMS,RRX-GL-2025,Northern Prairie Insurance (fictional),2025-12-15,Luis expects payroll up about 15% next year after adding a second crew.,call,2026-10-21T15:00:00Z
+nt-1002,acct-1006,2026-10-12T15:00:00Z,Previous AMS,IRF-PROP-2025,Northern Prairie Insurance (fictional),2025-12-01,Marcus confirmed the new sprinkler inspection is done. Ask carrier about a credit at renewal.,call,2026-10-12T15:00:00Z
+nt-1003,acct-1007,2026-10-28T15:00:00Z,Previous AMS,,,,Prospect meeting. Interested in a businessowners policy; current policy renews in January.,meeting,2026-10-28T15:00:00Z
