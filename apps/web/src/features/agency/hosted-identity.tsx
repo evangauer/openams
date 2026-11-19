@@ -25,7 +25,7 @@ import {
   usingAuthEmulator,
 } from "@/lib/firebase-client";
 import { AgencyWorkspace } from "./workspace";
-import { documentSmsSignin, phoneSetupRequested } from "@/lib/auth-methods";
+import { documentSmsSignin, phoneSetupRequested, rememberedTextSignIn } from "@/lib/auth-methods";
 import { ACCESS_REFUSED_EVENT } from "./model";
 import {
   Dialog,
@@ -299,6 +299,10 @@ function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [method, setMethod] = useState<"email" | "text" | "add-phone">("email");
   useEffect(() => setSmsEnabled(documentSmsSignin()), []);
+  // Read after mount (no hydration mismatch) and again on returning from the text step,
+  // where a refused number clears it.
+  const [textLinked, setTextLinked] = useState(false);
+  useEffect(() => setTextLinked(rememberedTextSignIn()), [method]);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -358,8 +362,11 @@ function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
         </button>
         {error && <p role="alert">{error}</p>}
       </form>
-      {smsEnabled && <div className="agency-auth-methods">
-        <button className="agency-button" onClick={() => { setMethod("text"); setError(""); }}>Use a text message</button>
+      {smsEnabled && <div className="agency-auth-methods agency-auth-entry">
+        {/* Display only, not a security control: a browser that has never signed in to an
+            account with a linked number has no use for this button. The server still accepts
+            a text sign-in only for a number linked to a verified-email account. */}
+        {textLinked && <button className="agency-button" onClick={() => { setMethod("text"); setError(""); }}>Use a text message</button>}
         <button className="agency-button" onClick={() => { setMethod(method === "add-phone" ? "email" : "add-phone"); setError(""); }}>{method === "add-phone" ? "Use email sign-in" : "Add or change text sign-in"}</button>
       </div>}
       <small>Sign in to accept an invitation or check whether agency setup is available.</small>

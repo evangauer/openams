@@ -238,7 +238,10 @@ Users first prove their email with an email link. On the sign-in screen, **Add o
 text sign-in** sends a fresh email link, then lets the user verify and link a mobile
 number to that same Firebase UID. It never merges accounts. A number already linked to
 another user is refused. Later, either an email link or a text code reaches the same
-membership; the server never looks up agency access using a submitted number.
+membership; the server never looks up agency access using a submitted number. The
+sign-in page offers **Use a text message** only in a browser whose last sign-in was by an
+account with a linked number (remembered as a yes/no flag, never the number); this only
+changes what is shown, and the server check described below is unchanged.
 
 A phone-only Firebase identity cannot mint an application session. If Firebase creates
 an empty identity during an unlinked number's first sign-in, the browser removes only
