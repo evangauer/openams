@@ -237,6 +237,55 @@ html[data-theme] .auth-form .agency-hosted-divider {
   margin: 8px 0 0;
   color: var(--color-ink-subtle);
 }
+/* Text sign-in number: the country's calling code beside the field. The native select
+   lies transparent over the code, so the picker, keyboard and screen reader behavior
+   are the browser's own; the code and the ring around it are drawn here. */
+.auth-phone {
+  display: flex;
+  gap: 8px;
+}
+html[data-theme] .auth-form .auth-phone > input {
+  flex: 1 1 0;
+  width: auto;
+}
+html[data-theme] .auth-form .auth-phone-country {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--portal-line-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--portal-navy);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme] .auth-form .auth-phone-country > svg {
+  color: var(--color-ink-subtle);
+}
+html[data-theme] .auth-form .auth-phone-country select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+  /* iOS zooms the page when a focused control's text is under 16px. */
+  font-size: 16px;
+}
+html[data-theme] .auth-form .auth-phone-country:focus-within {
+  outline: 2px solid var(--portal-teal);
+  outline-offset: 0;
+  border-color: var(--portal-teal);
+  box-shadow: 0 0 0 4px rgba(var(--portal-accent-rgb), 0.16);
+}
 html[data-theme] .auth-form .agency-login-roles {
   width: 100%;
 }
