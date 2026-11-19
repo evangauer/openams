@@ -839,17 +839,31 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
                 : null,
           });
         }
-      // Open sign-up: anyone without a membership may try (limits apply on create).
+      // Open sign-up: anyone without a membership may try (daily caps apply on create).
       // Otherwise first-run setup: only an install-time administrator, only while this
       // instance has no agency.
+      // The create endpoint would refuse this person: they, or another address of their
+      // inbox, already created an agency. Say so now instead of after they fill in the
+      // form. Nothing about that agency or address is returned.
+      const agencyLimitReached =
+        !membership && signup === "open"
+          ? (
+              await deps.db.getAll(
+                r.limit(`agency_creator_${uid}`),
+                r.limit(`agency_mailbox_${sha(canonicalMailbox(email).mailbox)}`),
+              )
+            ).some((doc) => doc.exists)
+          : false;
       const setupAvailable =
         !membership &&
-        (signup === "open" ||
-          (adminEmails.has(email) && (await r.anyAgency.get()).empty));
+        (signup === "open"
+          ? !agencyLimitReached
+          : adminEmails.has(email) && (await r.anyAgency.get()).empty);
       response.json({
         uid,
         email,
         setupAvailable,
+        agencyLimitReached,
         signup,
         mfaRequired: requireMfa,
         terms,
@@ -929,7 +943,11 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
           );
           const domainDay = rest[0];
           if (creator.exists || mailboxUsed.exists)
-            throw new IdentityError(429, "agency_limit_reached", "This email address has already created an agency.");
+            throw new IdentityError(
+              429,
+              "agency_limit_reached",
+              "An agency was already created from this inbox. Sign in with the address that created it, or ask the agency's administrator to invite this one.",
+            );
           const domainCount = Number(domainDay?.get("count") ?? 0);
           if (domainRef && domainCount >= limits.agenciesPerDomainPerDay)
             throw new IdentityError(

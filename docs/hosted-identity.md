@@ -45,7 +45,7 @@ Check are injected; the module never calls `initializeApp`.
 | `POST /identity/session` | anyone with a fresh ID token | App Check enforced when an `AppCheck` instance is passed |
 | `POST /identity/sign-in-link` | anyone | `{ sent: true }` when the deployment emailed the link, `{ sent: false }` to use Firebase's email; App Check as above |
 | `POST /identity/sign-out` | session | `revokeRefreshTokens` (signs out every device) |
-| `GET /identity/me` | session | membership, pending invitations for the verified email, and `setupAvailable` |
+| `GET /identity/me` | session | membership, pending invitations for the verified email, `setupAvailable`, and `agencyLimitReached` (`open` mode: this inbox already created an agency) |
 | `POST /identity/agencies` | no membership; `admin` mode: `AMS_ADMIN_EMAIL` and no agency yet; `open` mode: anyone within limits | tenant id `agency_` + 24 random URL-safe chars |
 | `GET/POST /identity/invitations`, `POST /identity/invitations/:id/revoke` | admin, manager | |
 | `POST /identity/invitations/accept` | session, no membership | verified email must equal the invited email |
@@ -103,7 +103,12 @@ Firestore access to these collections; deny them in security rules.
   addresses) can set up the agency, and only while none exists. Anyone else who signs in
   is asked to get an invitation. With `AMS_ADMIN_EMAIL` unset, nobody can set up an agency.
 - **`open` mode: one agency per uid and per mailbox, ever.** Aliases of one inbox (`+tags`,
-  and dots for Gmail) count as one mailbox. Each email domain may create
+  and dots for Gmail) count as one mailbox. Someone who signs in with another alias of an
+  inbox that already created an agency gets `setupAvailable: false` and
+  `agencyLimitReached: true` from `GET /identity/me`, so the app shows no create form: it
+  tells them to sign in with the address that created the agency, or to ask its
+  administrator for an invitation. The answer names neither that address nor the agency.
+  Each email domain may create
   `AMS_AGENCY_DOMAIN_DAILY_LIMIT` agencies per UTC day (default 5; large public mail
   providers are exempt). A deployment-wide backstop (`AMS_AGENCY_DAILY_LIMIT`, default
   1000) pauses sign-up, and the API logs `OpenAMS agency sign-ups today` once half of it is
