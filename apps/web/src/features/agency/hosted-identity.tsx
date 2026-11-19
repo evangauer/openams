@@ -4,12 +4,15 @@
 import {
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { ArrowRight, KeyRound, Link2Off, Loader2, LogOut, Mail, MailCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, ChevronDown, KeyRound, Link2Off, Loader2, LogOut, Mail, MailCheck, ShieldCheck } from "lucide-react";
 import qrcode from "qrcode-generator";
 import {
   completeSignIn,
@@ -26,6 +29,18 @@ import {
 } from "@/lib/firebase-client";
 import { AgencyWorkspace } from "./workspace";
 import { documentSmsSignin, phoneSetupRequested } from "@/lib/auth-methods";
+import {
+  FALLBACK_COUNTRY,
+  caretAfterDigits,
+  defaultCountry,
+  dialCode,
+  examplePlaceholder,
+  formatInternational,
+  formatNational,
+  parseTyped,
+  phoneCountries,
+  toE164,
+} from "@/lib/phone-input";
 import { ACCESS_REFUSED_EVENT } from "./model";
 import {
   Dialog,
@@ -259,14 +274,31 @@ function TextCodeForm({ start, onDone }: {
   start: (number: string, container: HTMLElement) => Promise<PhoneChallenge>;
   onDone: (step: SignInStep) => void;
 }) {
-  const [number, setNumber] = useState("");
+  const [country, setCountry] = useState(FALLBACK_COUNTRY);
+  const [national, setNational] = useState("");
   const [challenge, setChallenge] = useState<PhoneChallenge | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const captcha = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const caret = useRef<number | null>(null);
+  const [, redraw] = useReducer((count: number) => count + 1, 0);
+  const fieldId = useId();
+  const countries = useMemo(() => phoneCountries(), []);
+  // The browser's region is only known after hydration; a choice already made is kept.
+  const chosen = useRef(false);
+  useEffect(() => { if (!chosen.current) setCountry(defaultCountry()); }, []);
+  const shown = formatNational(country, national);
+  // Formatting moves punctuation, so the caret is put back after the digits it followed.
+  useLayoutEffect(() => {
+    if (caret.current === null || !field.current) return;
+    const at = caretAfterDigits(field.current.value, caret.current);
+    field.current.setSelectionRange(at, at);
+    caret.current = null;
+  });
   return <>
     {challenge ? <>
-      <p>Enter the code texted to <strong>{number}</strong>.</p>
+      <p>Enter the code texted to <strong>{formatInternational(country, national)}</strong>.</p>
       <CodeForm label="Text message code" submitLabel="Continue" busy={busy} error={error} onSubmit={async (code) => {
         setBusy(true); setError("");
         try { onDone(await challenge.submit(code)); }
@@ -278,13 +310,33 @@ function TextCodeForm({ start, onDone }: {
       event.preventDefault();
       if (!captcha.current) return;
       setBusy(true); setError("");
-      try { setChallenge(await start(number, captcha.current)); }
+      try { setChallenge(await start(toE164(country, national), captcha.current)); }
       catch (failure) { setError(signInErrorMessage(failure)); }
       finally { setBusy(false); }
     }}>
-      <label className="agency-field"><span>Mobile number, including country code</span>
-        <input type="tel" autoComplete="tel" required maxLength={30} placeholder="+1 202 555 0123" value={number} onChange={(event) => setNumber(event.target.value)} />
-      </label>
+      <div className="agency-field"><label htmlFor={fieldId}>Mobile number</label>
+        <div className="auth-phone">
+          <span className="auth-phone-country">
+            <span aria-hidden="true">+{dialCode(country)}</span>
+            <ChevronDown size={15} aria-hidden="true" />
+            <select aria-label="Country" value={country} onChange={(event) => { chosen.current = true; setCountry(event.target.value); }}>
+              {countries.map(({ iso, dial, name }) => <option key={iso} value={iso}>{name} (+{dial})</option>)}
+            </select>
+          </span>
+          <input ref={field} id={fieldId} type="tel" inputMode="tel" autoComplete="tel" required maxLength={30} placeholder={examplePlaceholder(country)} value={shown} onChange={(event) => {
+            const typed = parseTyped(country, event.target.value);
+            const position = event.target.selectionStart ?? event.target.value.length;
+            // A recognized calling code leaves the field, so the caret counts from after it.
+            const prefix = typed.national.startsWith("+") || !event.target.value.trimStart().startsWith("+") ? 0 : dialCode(typed.iso).length;
+            caret.current = Math.max(0, event.target.value.slice(0, position).replace(/\D/g, "").length - prefix);
+            if (typed.iso !== country) chosen.current = true;
+            setCountry(typed.iso);
+            setNational(typed.national);
+            // Deleting punctuation changes no digit; draw again so the caret still moves.
+            redraw();
+          }} />
+        </div>
+      </div>
       <label className="agency-hosted-note"><input type="checkbox" required /> I agree to receive a sign-in code by text. Message and data rates may apply. Google processes this number for authentication and abuse prevention.</label>
       <button className="agency-button primary" disabled={busy}>{busy ? "Sending…" : "Text me a code"}</button>
       {error && <p role="alert">{error}</p>}
