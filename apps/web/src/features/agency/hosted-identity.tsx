@@ -649,10 +649,8 @@ function JoinOrSetUp({
         title="This inbox already has an agency"
         lead={
           <>
-            Signed in as {me.email}. An agency was already created from this
-            inbox, so this address can&apos;t create another. Sign in with the
-            address that created it, or ask the agency&apos;s administrator to
-            invite this one.
+            Signed in as {me.email}. Sign in with the address that created the
+            agency, or ask its administrator to invite this one.
           </>
         }
       >
