@@ -111,6 +111,7 @@ test("anyone with a verified email can create one agency", async () => {
   const me = await json(await call("/identity/me", { cookie: people.avery.cookie }), 200);
   assert.equal(me.signup, "open");
   assert.equal(me.setupAvailable, true);
+  assert.ok(!me.agencyLimitReached);
   const { membership } = await create(people.avery, "Harbor Test Agency");
   assert.match(membership.tenantId, /^agency_[A-Za-z0-9_-]{24}$/);
   assert.equal(membership.role, "admin");
@@ -148,9 +149,29 @@ test("one agency per person and per mailbox, ever", async () => {
   // Even with the membership link cleared, the same person can't create another.
   await db().collection("identity_users").doc(quinn.uid).update({ tenantId: null });
   assert.equal((await create(quinn, "Another", 429)).error, "agency_limit_reached");
-  // Aliases of one mailbox count as one sign-up.
+  const me = (person) => call("/identity/me", { cookie: person.cookie }).then((r) => json(r, 200));
+  const quinnMe = await me(quinn);
+  assert.equal(quinnMe.setupAvailable, false);
+  assert.equal(quinnMe.agencyLimitReached, true);
+  // Aliases of one mailbox count as one sign-up. The alias is told before it sees a form,
+  // and learns nothing about the other address or its agency.
   const alias = await signIn("quinn.founder+second@harbor-test.example");
-  assert.equal((await create(alias, "Alias Agency", 429)).error, "agency_limit_reached");
+  const aliasMe = await me(alias);
+  assert.equal(aliasMe.setupAvailable, false);
+  assert.equal(aliasMe.agencyLimitReached, true);
+  assert.equal(aliasMe.membership, null);
+  assert.deepEqual(aliasMe.pendingInvitations, []);
+  assert.doesNotMatch(JSON.stringify(aliasMe), /quinn\.founder@|Quinn Test Brokerage|agency_[A-Za-z0-9_-]{24}/);
+  const refused = await create(alias, "Alias Agency", 429);
+  assert.equal(refused.error, "agency_limit_reached");
+  assert.equal(
+    refused.message,
+    "An agency was already created from this inbox. Sign in with the address that created it, or ask the agency's administrator to invite this one.",
+  );
+  // An unrelated address can still create an agency.
+  const stranger = await me(await signIn("sam.newcomer@orchard-test.example"));
+  assert.equal(stranger.setupAvailable, true);
+  assert.ok(!stranger.agencyLimitReached);
 });
 
 test("per-domain and deployment-wide daily caps", async () => {

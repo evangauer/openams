@@ -641,6 +641,30 @@ function JoinOrSetUp({
       setBusy(false);
     }
   }
+  // Open sign-up allows one agency per inbox. With nothing to join, say so and offer
+  // the way forward instead of a form the API would refuse.
+  if (me.agencyLimitReached && !me.pendingInvitations.length)
+    return (
+      <Card
+        title="This inbox already has an agency"
+        lead={
+          <>
+            Signed in as {me.email}. An agency was already created from this
+            inbox, so this address can&apos;t create another. Sign in with the
+            address that created it, or ask the agency&apos;s administrator to
+            invite this one.
+          </>
+        }
+      >
+        <button
+          className="agency-button primary"
+          onClick={() => void signOutAndReload()}
+        >
+          Use a different email
+          <ArrowRight size={15} />
+        </button>
+      </Card>
+    );
   return (
     <Card
       title={

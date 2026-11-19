@@ -19,8 +19,10 @@ export interface IdentityMembership {
 export interface IdentityMe {
   uid: string;
   email: string;
-  /** True when this person may create an agency now: anyone with open sign-up, otherwise only an install-time administrator while the deployment has no agency. */
+  /** True when this person may create an agency now: with open sign-up, anyone whose inbox hasn't created one; otherwise only an install-time administrator while the deployment has no agency. */
   setupAvailable: boolean;
+  /** Open sign-up: this person, or another address of their inbox, already created an agency, so they can't create another. */
+  agencyLimitReached?: boolean;
   /** "open": anyone can create an agency; "admin": one agency, set up by its administrator. */
   signup?: "open" | "admin";
   /** Every sign-in needs a second factor (AMS_REQUIRE_MFA). */
