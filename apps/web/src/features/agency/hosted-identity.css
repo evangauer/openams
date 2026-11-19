@@ -464,3 +464,5 @@ html[data-theme="brand"] .agency-signout:hover {
 .agency-terms a { text-decoration: underline; }
 
 .agency-auth-methods { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* On the sign-in page a lone method button lines up with the form above it. */
+.agency-auth-entry > .agency-button:only-child { width: min(340px, 100%); }

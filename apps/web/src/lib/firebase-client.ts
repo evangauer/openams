@@ -33,7 +33,7 @@ import {
   type AppCheck,
 } from "firebase/app-check";
 import { documentAuthTenantId } from "./auth-tenant";
-import { documentSmsSignin, internationalPhone, phoneSetupRequested } from "./auth-methods";
+import { documentSmsSignin, internationalPhone, phoneSetupRequested, rememberTextSignIn } from "./auth-methods";
 
 // NEXT_PUBLIC_ values are inlined at build time; they identify the Firebase project
 // and are not secrets. Never commit real values (see .env.example).
@@ -248,6 +248,9 @@ export async function startTextSignIn(number: string, container: HTMLElement): P
         // Firebase creates a phone-only user on first SMS sign-in. Remove only the
         // just-created empty identity; never merge or delete an existing account.
         if (getAdditionalUserInfo(signedIn)?.isNewUser) await deleteUser(signedIn.user);
+        // This number isn't linked to a verified-email account, so stop offering the
+        // text button in this browser until a sign-in shows a linked number.
+        rememberTextSignIn(false);
         throw new SignInRefused("Use an email link first, then choose Add text sign-in to link this number to your account.");
       }
       if (await exchange(signedIn.user, appCheck) !== "ok")
@@ -270,7 +273,12 @@ async function exchange(user: User, appCheck: AppCheck | null): Promise<"ok" | "
     body: JSON.stringify({ idToken }),
     cache: "no-store",
   });
-  if (response.ok) return "ok";
+  if (response.ok) {
+    // Every session starts here. Note whether this account has a linked mobile number so
+    // the sign-in page offers the text button only where it can work (a yes/no flag).
+    rememberTextSignIn(Boolean(user.phoneNumber));
+    return "ok";
+  }
   const value = await response.json().catch(() => ({}));
   if (value.error === "mfa_enrollment_required") return "enroll";
   if (value.error === "mfa_required") return "code";
@@ -325,6 +333,7 @@ export async function completeSignIn(email: string, href: string): Promise<SignI
           }),
           skip: guard(() => finish(user, false)),
           remove: guard(async () => {
+            // unlink clears user.phoneNumber itself, so the exchange below records "no number".
             if (user.phoneNumber) await unlink(user, PhoneAuthProvider.PROVIDER_ID);
             return finish(user, false);
           }),
