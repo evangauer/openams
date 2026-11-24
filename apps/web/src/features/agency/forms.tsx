@@ -243,13 +243,15 @@ function FormCard({
   const fresh = submissions.filter((item) => item.data.status === "new").length;
   const link = linkId && status === "published" ? formUrl(window.location.origin, linkId) : "";
   return (
-    <article className="fm-form" style={{ "--fm-accent": form.data.branding.accent } as React.CSSProperties}>
+    <article className="fm-form">
       <button type="button" className="fm-form-main" onClick={open}>
-        <span className="fm-form-status" data-status={status}>
-          <i />
-          {status === "published" ? "Live" : status === "paused" ? "Paused" : "Draft"}
+        <span className="fm-form-head">
+          <h3>{form.data.name}</h3>
+          <span className="fm-form-status" data-status={status}>
+            <i />
+            {status === "published" ? "Live" : status === "paused" ? "Paused" : "Draft"}
+          </span>
         </span>
-        <h3>{form.data.name}</h3>
         <p>
           {form.data.lines.length
             ? form.data.lines.map((line) => line.label).join(" · ")
@@ -262,8 +264,10 @@ function FormCard({
       </button>
       <footer>
         <button type="button" className="fm-form-count" onClick={openSubmissions}>
-          <Inbox size={14} />
-          {submissions.length} {submissions.length === 1 ? "submission" : "submissions"}
+          <Inbox size={15} />
+          <span>
+            {submissions.length} {submissions.length === 1 ? "submission" : "submissions"}
+          </span>
           {fresh > 0 && <em>{fresh} new</em>}
         </button>
         {link && (

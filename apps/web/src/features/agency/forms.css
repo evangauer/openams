@@ -120,8 +120,8 @@
 }
 .fm-forms {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  gap: 18px;
 }
 .fm-form {
   display: flex;
@@ -141,24 +141,37 @@
 .fm-form-main {
   flex: 1;
   display: block;
-  padding: 18px 20px 16px;
-  border-top: 4px solid var(--fm-accent, var(--f-accent));
+  padding: 22px 22px 20px;
   text-align: left;
 }
+/* The name leads; its status sits apart at the far side of the same line. */
+.fm-form-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.fm-form-head .fm-form-status {
+  flex: none;
+  margin-top: 1px;
+}
 .fm-form-main h3 {
-  margin-top: 10px;
+  min-width: 0;
   font-size: 17px;
   font-weight: 650;
+  line-height: 1.3;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 .fm-form-main p {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 14px;
+  line-height: 1.45;
   color: var(--f-muted);
 }
 .fm-form-main small {
   display: block;
-  margin-top: 12px;
+  margin-top: 18px;
   font-size: 12.5px;
   color: var(--f-subtle);
 }
@@ -210,38 +223,60 @@
 }
 .fm-form footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px 8px 14px;
+  gap: 4px 8px;
+  padding: 8px 12px 8px 22px;
   border-top: 1px solid var(--f-line);
   background: color-mix(in srgb, var(--f-canvas) 55%, #fff);
 }
 .fm-form footer > span {
   display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+/* The card's own actions are quieter and closer set than a page's buttons. */
+.fm .fm-form footer .agency-button {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13.5px;
 }
 .fm-form-count {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 6px;
+  gap: 8px;
+  padding: 6px 0;
   border-radius: 8px;
   font-size: 13px;
   color: var(--f-muted);
+  white-space: nowrap;
 }
 .fm-form-count:hover {
   color: var(--f-ink);
+}
+.fm-form-count:hover > span {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .fm-form-count em {
-  padding: 1px 8px;
+  padding: 2px 9px;
   border-radius: 99px;
   background: var(--f-accent);
   color: var(--f-on-accent);
   font-style: normal;
   font-size: 12px;
   font-weight: 650;
+}
+
+/* On a phone the card's edges come in a little, so its footer still fits on one line. */
+@media (max-width: 480px) {
+  .fm-form-main {
+    padding: 20px 18px 18px;
+  }
+  .fm-form footer {
+    padding: 8px 6px 8px 18px;
+  }
 }
 
 /* =========================================================== submissions */
