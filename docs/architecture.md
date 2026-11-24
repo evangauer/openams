@@ -13,8 +13,8 @@ browser ──► apps/web (Next.js) ──► /api/agency/* proxy ──► app
 ## packages/contracts
 
 Zod schemas for every agency record kind (accounts, contacts, policies, renewals,
-tasks, service requests, certificates, claims, documents, invoices, statements and
-more), plus the role permissions (`admin`, `manager`, `member`, `accountant`,
+tasks, service requests, certificates, claims, documents, invoices, statements, hosted
+forms and their submissions, and more), plus the role permissions (`admin`, `manager`, `member`, `accountant`,
 `viewer`). The API and the web app both import these, so a record that validates in
 the browser validates the same way on the server.
 
@@ -45,6 +45,12 @@ the browser validates the same way on the server.
   membership and direct-message participants. Immutable messages, retry receipts,
   read markers and presence are separate from client records. Operational backups
   must retain these chat collections; normal client-record exports exclude them.
+- **`form-routes.ts`**, **`form-links.ts`**, **`firebase/firestore-form-links.ts`**:
+  [hosted forms](forms.md). An agency publishes a form at a public link; a client's
+  answers and files arrive without a session and wait as a submission until staff file
+  them to an account. The link index is the only thing that maps a link to an agency.
+  The question catalog and the answer rules live in `packages/contracts`, so the page
+  and the server check answers the same way.
 - **`firebase/identity.ts`**: opt-in hosted identity (`AMS_AUTH_MODE=firebase`):
   Firebase email-link sign-in, session cookies, agency creation, invitations and team
   membership. See [hosted-identity.md](hosted-identity.md).
@@ -57,7 +63,8 @@ the browser validates the same way on the server.
 
 A Next.js app. The workspace UI lives in `src/features/agency`. The browser talks only
 to `/api/agency/*`, which checks the request origin and session, then forwards an
-allowlisted path to the API. Local evaluation uses per-role test sessions stored in an
+allowlisted path to the API. The one page for people outside the agency is a hosted form
+at `/f/<link>` (`src/features/forms`); it and `/api/forms/*` never read a session. Local evaluation uses per-role test sessions stored in an
 HTTP-only cookie scoped to that path. Hosted mode stores a Firebase session cookie in
 `__Host-openams_session` and proxies identity calls through `/api/identity/*`.
 

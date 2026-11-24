@@ -23,6 +23,7 @@ import { directConversation, SqliteAmsChat } from "./chat.js";
 import { DemoSandboxes } from "./demo-sandboxes.js";
 import { SqliteMailboxStore } from "./mailbox-store.js";
 import { mailboxRuntime } from "./mailbox-oauth.js";
+import { SqliteFormLinks } from "./form-links.js";
 
 // Evaluation entrypoint: local development, the IAP-protected hosted preview, or the
 // public demo (scripts/preview.mjs). Always loopback; only the web app reaches it.
@@ -74,7 +75,13 @@ const demoMembers = members.map((member) => ({
   email: `${member.role}@harbor.example.test`,
 }));
 const files = new LocalAmsFiles(join(directory, "files"));
-const demo = new LocalAmsDemo(directory, repository, files, demoMembers);
+const formLinks = new SqliteFormLinks(repository);
+// Anyone can open the public demo, so its forms are built and previewed there but never
+// published: an open sandbox must not host public forms on this domain.
+const demo = new LocalAmsDemo(directory, repository, files, demoMembers, {
+  links: formLinks,
+  publishing: !publicDemo,
+});
 await demo.load();
 /** In the demo agency the fictional teammates show as around, so chat feels lived in. */
 class LocalChat extends SqliteAmsChat {
@@ -222,6 +229,7 @@ app.use(
     members: async (tenantId) =>
       tenantId === "local_agency" ? members : demoMembers,
     chat,
+    forms: { links: formLinks, publishing: !publicDemo },
     // The public demo connects to no mailbox.
     ...(sandboxes
       ? {}

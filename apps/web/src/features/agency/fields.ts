@@ -269,6 +269,9 @@ export const fields: Record<AmsKind, FieldSpec[]> = {
   statements: [],
   // Suggestions have their own screen (suggestions.tsx), not the generic editor.
   suggestions: [],
+  // Forms and their submissions have their own screens (forms.tsx).
+  forms: [],
+  formsubmissions: [],
 };
 export const actionFields: Record<string, FieldSpec[]> = {
   "policyChange.review": [
@@ -425,6 +428,12 @@ export const actionLabels: Record<string, string> = {
   "commission.allocate": "Set producer share",
   "statement.post": "Post matched rows",
   "statement.match": "Match statement row",
+  "form.publish": "Published form",
+  "form.pause": "Paused form",
+  "formSubmission.receive": "Form submission received",
+  "formSubmission.file": "Filed form submission",
+  "formSubmission.dismiss": "Dismissed form submission",
+  "formSubmission.reopen": "Reopened form submission",
   archive: "Archive record",
   restore: "Restore record",
 };

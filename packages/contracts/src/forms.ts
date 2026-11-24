@@ -1,0 +1,745 @@
+import { z } from "zod";
+
+/*
+ * Hosted forms: a form an agency publishes at a public link so a client can answer
+ * questions and upload files without signing in. A submission is kept apart from the
+ * book until a person at the agency files it to an account.
+ *
+ * This module has no imports from ./index.js (which imports it), so it defines the few
+ * primitives it needs.
+ */
+
+const Id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const reference = Id.nullable().default(null);
+const Sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+/** Section, field and line identifiers: stable keys inside one form. */
+export const AmsFormKey = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
+const label = (max: number) => z.string().trim().min(1).max(max);
+
+export const AMS_FORM_FIELD_TYPES = [
+  "text",
+  "longtext",
+  "email",
+  "phone",
+  "number",
+  "currency",
+  "date",
+  "select",
+  "multiselect",
+  "yesno",
+  "address",
+  "file",
+] as const;
+export type AmsFormFieldType = (typeof AMS_FORM_FIELD_TYPES)[number];
+
+/** Each item of a repeating section can become one of these on the account. */
+export const AMS_FORM_EXPOSURE_KINDS = [
+  "location",
+  "building",
+  "vehicle",
+  "driver",
+  "payroll",
+  "equipment",
+  "operations",
+] as const;
+
+/** What a client may upload through a public form (apps/api/src/files.ts checks the bytes). */
+export const AMS_FORM_UPLOAD_EXTENSIONS = [
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+  "docx",
+  "xlsx",
+  "csv",
+] as const;
+export const AMS_FORM_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const AMS_FORM_UPLOAD_MAX_FILES = 10;
+export const AMS_FORM_UPLOADS_PER_FIELD = 5;
+export const AMS_FORM_MAX_ITEMS = 25;
+
+export const AmsFormFieldSchema = z
+  .object({
+    id: AmsFormKey,
+    label: label(200),
+    help: z.string().trim().max(300).default(""),
+    type: z.enum(AMS_FORM_FIELD_TYPES),
+    required: z.boolean().default(false),
+    /** Choices for select and multiselect questions. */
+    options: z.array(z.string().trim().min(1).max(120)).max(60).default([]),
+    /** Ask this only when an earlier question in the same section has this answer. */
+    showIf: z
+      .object({
+        field: AmsFormKey,
+        equals: z.union([z.string().max(120), z.boolean()]),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+  })
+  .strict();
+export type AmsFormField = z.infer<typeof AmsFormFieldSchema>;
+
+export const AmsFormSectionSchema = z
+  .object({
+    id: AmsFormKey,
+    title: label(120),
+    description: z.string().trim().max(400).default(""),
+    /** Lines of business this section belongs to. Empty: every client answers it. */
+    lines: z.array(AmsFormKey).max(40).default([]),
+    /** Answered once per item, with "Add another". */
+    repeat: z
+      .object({
+        /** What one item is called: "driver", "vehicle", "location". */
+        noun: label(40),
+        min: z.number().int().min(0).max(AMS_FORM_MAX_ITEMS).default(1),
+        max: z.number().int().min(1).max(AMS_FORM_MAX_ITEMS).default(10),
+        /** Fields whose answers name an item: year, make and model for a vehicle. */
+        title: z.array(AmsFormKey).max(4).default([]),
+      })
+      .strict()
+      .refine((value) => value.min <= value.max, "The least must not exceed the most.")
+      .nullable()
+      .default(null),
+    /** On filing, each item becomes an exposure of this kind on the account. */
+    exposure: z.enum(AMS_FORM_EXPOSURE_KINDS).nullable().default(null),
+    fields: z.array(AmsFormFieldSchema).min(1).max(40),
+  })
+  .strict()
+  .superRefine((section, ctx) => {
+    const seen = new Map<string, AmsFormField>();
+    section.fields.forEach((field, index) => {
+      const issue = (message: string) =>
+        ctx.addIssue({ code: "custom", path: ["fields", index], message });
+      if (seen.has(field.id)) issue("Give each question in a section its own id.");
+      if (
+        (field.type === "select" || field.type === "multiselect") &&
+        !field.options.length
+      )
+        issue("Add at least one choice.");
+      if (new Set(field.options).size !== field.options.length)
+        issue("List each choice once.");
+      if (field.showIf) {
+        const controller = seen.get(field.showIf.field);
+        if (!controller || !["yesno", "select"].includes(controller.type))
+          issue("A question can depend only on an earlier yes/no or choice question in the same section.");
+        else if (
+          controller.type === "yesno"
+            ? typeof field.showIf.equals !== "boolean"
+            : !controller.options.includes(String(field.showIf.equals))
+        )
+          issue("The answer this question depends on is not one of the choices.");
+      }
+      seen.set(field.id, field);
+    });
+    if (section.repeat?.title.some((id) => !seen.has(id)))
+      ctx.addIssue({
+        code: "custom",
+        path: ["repeat", "title"],
+        message: "An item can be named only by questions in its own section.",
+      });
+  });
+export type AmsFormSection = z.infer<typeof AmsFormSectionSchema>;
+
+export const AmsFormLineSchema = z
+  .object({ id: AmsFormKey, label: label(80) })
+  .strict();
+export type AmsFormLine = z.infer<typeof AmsFormLineSchema>;
+
+/** The section every form opens with; a submission's contact is read from it. */
+export const AMS_FORM_CONTACT_SECTION = "contact";
+/** Field ids in the contact section with a fixed meaning. */
+export const AMS_FORM_CONTACT_FIELDS = {
+  name: "name",
+  email: "email",
+  phone: "phone",
+  business: "business_name",
+  address: "address",
+} as const;
+export const AMS_FORM_STATUSES = ["draft", "published", "paused"] as const;
+export const AMS_FORM_DEFAULT_ACCENT = "#1f6f5c";
+/** `<form name>-<random>`: readable, and never guessable from another form's link. */
+export const AmsFormLinkId = z
+  .string()
+  .regex(/^[a-z0-9](?:[a-z0-9-]{4,62})[a-z0-9]$/);
+
+export const AmsFormSchema = z
+  .object({
+    /** The agency's own name for the form. Clients see `title`. */
+    name: label(120),
+    status: z.enum(AMS_FORM_STATUSES).default("draft"),
+    /** Set when the form is first published; the link never changes afterwards. */
+    linkId: AmsFormLinkId.nullable().default(null),
+    publishedAt: z.string().datetime().nullable().default(null),
+    /** Lines the client can ask about. With two or more, the client chooses. */
+    lines: z.array(AmsFormLineSchema).max(24).default([]),
+    title: label(120),
+    intro: z.string().trim().max(600).default(""),
+    sections: z.array(AmsFormSectionSchema).min(1).max(40),
+    branding: z
+      .object({
+        agencyName: label(120),
+        accent: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .default(AMS_FORM_DEFAULT_ACCENT),
+        /** A small raster logo as a data URL, resized in the browser before saving. */
+        logo: z
+          .union([
+            z.literal(""),
+            z
+              .string()
+              .max(60_000)
+              .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/),
+          ])
+          .default(""),
+        phone: z.string().trim().max(40).default(""),
+        email: z.union([z.literal(""), z.string().email().max(254)]).default(""),
+      })
+      .strict(),
+    confirmation: z
+      .object({
+        title: label(120).default("Thank you. We have your information."),
+        body: z
+          .string()
+          .trim()
+          .max(600)
+          .default("Someone from our team will review it and get back to you."),
+      })
+      .strict()
+      .prefault({}),
+    /** Shown above the submit button. */
+    consent: z.string().trim().max(1000).default(""),
+    /** Who gets the follow-up task for each submission. Falls back to the agency default. */
+    ownerId: reference,
+    followUpDays: z.number().int().min(0).max(30).default(1),
+  })
+  .strict()
+  .superRefine((form, ctx) => {
+    const issue = (path: (string | number)[], message: string) =>
+      ctx.addIssue({ code: "custom", path, message });
+    const lineIds = new Set(form.lines.map((line) => line.id));
+    if (lineIds.size !== form.lines.length)
+      issue(["lines"], "List each line of business once.");
+    const sectionIds = new Set<string>();
+    let fields = 0;
+    form.sections.forEach((section, index) => {
+      if (sectionIds.has(section.id))
+        issue(["sections", index, "id"], "Give each section its own id.");
+      sectionIds.add(section.id);
+      fields += section.fields.length;
+      if (section.lines.some((line) => !lineIds.has(line)))
+        issue(
+          ["sections", index, "lines"],
+          "A section can belong only to a line of business on this form.",
+        );
+    });
+    if (fields > 300) issue(["sections"], "Keep a form to 300 questions or fewer.");
+    const contact = form.sections[0];
+    const field = (id: string) => contact?.fields.find((item) => item.id === id);
+    const name = field(AMS_FORM_CONTACT_FIELDS.name);
+    const email = field(AMS_FORM_CONTACT_FIELDS.email);
+    if (
+      contact?.id !== AMS_FORM_CONTACT_SECTION ||
+      contact.repeat ||
+      contact.lines.length ||
+      name?.type !== "text" ||
+      !name.required ||
+      name.showIf ||
+      email?.type !== "email" ||
+      !email.required ||
+      email.showIf
+    )
+      issue(
+        ["sections", 0],
+        "A form starts with a contact section that asks for a name and an email address.",
+      );
+  });
+export type AmsForm = z.infer<typeof AmsFormSchema>;
+
+/* ------------------------------------------------------------------ answers */
+
+export const AmsFormAddressValueSchema = z
+  .object({
+    line1: z.string().trim().max(200).default(""),
+    line2: z.string().trim().max(200).default(""),
+    city: z.string().trim().max(100).default(""),
+    state: z.string().trim().max(2).default(""),
+    postalCode: z.string().trim().max(20).default(""),
+  })
+  .strict();
+export type AmsFormAddressValue = z.infer<typeof AmsFormAddressValueSchema>;
+export const AmsFormValueSchema = z.union([
+  z.string().max(4000),
+  z.boolean(),
+  z.array(z.string().max(120)).max(60),
+  AmsFormAddressValueSchema,
+]);
+export type AmsFormValue = z.infer<typeof AmsFormValueSchema>;
+/** One item's answers, by field id. */
+export type AmsFormItem = Record<string, AmsFormValue>;
+/** Answers by section id. A section that doesn't repeat has one item. */
+export const AmsFormAnswersSchema = z.record(
+  AmsFormKey,
+  z.array(z.record(AmsFormKey, AmsFormValueSchema)).max(AMS_FORM_MAX_ITEMS),
+);
+export type AmsFormAnswers = z.infer<typeof AmsFormAnswersSchema>;
+/** A file the client uploaded before submitting, named by where it belongs. */
+export const AmsFormUploadSchema = z
+  .object({
+    section: AmsFormKey,
+    item: z.number().int().min(0).max(AMS_FORM_MAX_ITEMS - 1),
+    field: AmsFormKey,
+    name: z.string().trim().min(1).max(200),
+    sha256: Sha256,
+    bytes: z.number().int().positive().max(AMS_FORM_UPLOAD_MAX_BYTES),
+  })
+  .strict();
+export type AmsFormUpload = z.infer<typeof AmsFormUploadSchema>;
+/** What the public page sends when the client submits. */
+export const AmsFormSubmitSchema = z
+  .object({
+    /** Chosen by the page, so a retried submit is never saved twice. */
+    id: z.string().uuid(),
+    /** The form revision the client answered. */
+    revision: z.number().int().positive().safe(),
+    lines: z.array(AmsFormKey).max(24).default([]),
+    answers: AmsFormAnswersSchema,
+    files: z.array(AmsFormUploadSchema).max(AMS_FORM_UPLOAD_MAX_FILES).default([]),
+    /** A field people never see. Anything in it means a script filled the form. */
+    confirm: z.string().max(200).default(""),
+    /** How long the page was open, in milliseconds. */
+    elapsedMs: z.number().int().min(0).safe().default(0),
+  })
+  .strict();
+export type AmsFormSubmit = z.infer<typeof AmsFormSubmitSchema>;
+
+/* -------------------------------------------------------------- submissions */
+
+export const AMS_FORM_SUBMISSION_STATUSES = ["new", "filed", "dismissed"] as const;
+/**
+ * A submission keeps the questions as they were asked beside the answers, so it reads
+ * the same after the form is edited or retired.
+ */
+export const AmsFormSubmissionSchema = z
+  .object({
+    formId: Id,
+    formName: label(120),
+    formRevision: z.number().int().positive().safe(),
+    lines: z.array(AmsFormLineSchema).max(24).default([]),
+    contact: z
+      .object({
+        name: label(200),
+        email: z.string().email().max(254),
+        phone: z.string().trim().max(40).default(""),
+        businessName: z.string().trim().max(200).default(""),
+      })
+      .strict(),
+    sections: z
+      .array(
+        z
+          .object({
+            id: AmsFormKey,
+            title: label(120),
+            /** The repeat noun, or empty for a section answered once. */
+            noun: z.string().trim().max(40).default(""),
+            exposure: z.enum(AMS_FORM_EXPOSURE_KINDS).nullable().default(null),
+            items: z
+              .array(
+                z
+                  .object({
+                    /** What the client's answers call this item: "2021 Toyota Camry". */
+                    title: z.string().trim().max(200).default(""),
+                    answers: z
+                      .array(
+                        z
+                          .object({
+                            id: AmsFormKey,
+                            label: label(200),
+                            type: z.enum(AMS_FORM_FIELD_TYPES),
+                            value: AmsFormValueSchema,
+                          })
+                          .strict(),
+                      )
+                      .max(40),
+                  })
+                  .strict(),
+              )
+              .max(AMS_FORM_MAX_ITEMS),
+          })
+          .strict(),
+      )
+      .max(40),
+    files: z
+      .array(
+        z
+          .object({
+            id: AmsFormKey,
+            section: AmsFormKey,
+            item: z.number().int().min(0).max(AMS_FORM_MAX_ITEMS - 1),
+            field: AmsFormKey,
+            label: label(200),
+            name: label(200),
+            mediaType: label(200),
+            bytes: z.number().int().positive().max(AMS_FORM_UPLOAD_MAX_BYTES),
+            sha256: Sha256,
+            storageKey: label(500),
+            /** The account document this file became when the submission was filed. */
+            documentId: reference,
+          })
+          .strict(),
+      )
+      .max(AMS_FORM_UPLOAD_MAX_FILES)
+      .default([]),
+    status: z.enum(AMS_FORM_SUBMISSION_STATUSES).default("new"),
+    /** The account the submission was filed to. */
+    accountId: reference,
+    /** The follow-up task opened when the submission arrived. */
+    taskId: reference,
+    filedAt: z.string().datetime().nullable().default(null),
+    filedBy: reference,
+    dismissReason: z.string().trim().max(500).default(""),
+    submittedAt: z.string().datetime(),
+  })
+  .strict();
+export type AmsFormSubmission = z.infer<typeof AmsFormSubmissionSchema>;
+
+/** How a person at the agency files a submission to the book. */
+export const AmsFormFilingSchema = z
+  .object({
+    /** An existing account, or null to create a prospect from the submission. */
+    accountId: reference,
+    account: z
+      .object({
+        name: label(500),
+        type: z.enum(["business", "person"]),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+    createContact: z.boolean().default(true),
+    createExposures: z.boolean().default(true),
+  })
+  .strict()
+  .refine(
+    (value) => Boolean(value.accountId) !== Boolean(value.account),
+    "Choose an existing account or name a new one.",
+  );
+export type AmsFormFiling = z.infer<typeof AmsFormFilingSchema>;
+
+/* ------------------------------------------------------- the public version */
+
+/** What an unauthenticated visitor receives: the questions and the look, nothing else. */
+export interface AmsPublicForm {
+  linkId: string;
+  revision: number;
+  title: string;
+  intro: string;
+  lines: AmsFormLine[];
+  sections: AmsFormSection[];
+  branding: AmsForm["branding"];
+  confirmation: AmsForm["confirmation"];
+  consent: string;
+}
+export function amsPublicForm(
+  form: AmsForm,
+  revision: number,
+  linkId = form.linkId ?? "",
+): AmsPublicForm {
+  return {
+    linkId,
+    revision,
+    title: form.title,
+    intro: form.intro,
+    lines: form.lines,
+    sections: form.sections,
+    branding: form.branding,
+    confirmation: form.confirmation,
+    consent: form.consent,
+  };
+}
+
+/* ---------------------------------------------------------------- behaviour */
+
+type FormShape = Pick<AmsPublicForm, "lines" | "sections">;
+
+/** The lines a submission is about: the client's choice, or the form's only line. */
+export function amsFormChosenLines(form: FormShape, chosen: string[]): AmsFormLine[] {
+  if (form.lines.length <= 1) return form.lines;
+  return form.lines.filter((line) => chosen.includes(line.id));
+}
+/** The sections a client answers, given the lines they chose. */
+export function amsFormSections(form: FormShape, chosen: string[]): AmsFormSection[] {
+  const lines = new Set(amsFormChosenLines(form, chosen).map((line) => line.id));
+  return form.sections.filter(
+    (section) =>
+      !section.lines.length || section.lines.some((line) => lines.has(line)),
+  );
+}
+export function amsFormFieldVisible(field: AmsFormField, item: AmsFormItem): boolean {
+  return !field.showIf || item[field.showIf.field] === field.showIf.equals;
+}
+/** The fields of a section a client is asked for one item, following earlier answers. */
+export function amsFormVisibleFields(
+  section: AmsFormSection,
+  item: AmsFormItem,
+): AmsFormField[] {
+  const visible: AmsFormField[] = [];
+  for (const field of section.fields)
+    if (
+      !field.showIf ||
+      (visible.some((earlier) => earlier.id === field.showIf!.field) &&
+        amsFormFieldVisible(field, item))
+    )
+      visible.push(field);
+  return visible;
+}
+export function amsFormValueEmpty(value: AmsFormValue | undefined): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string") return !value.trim();
+  if (typeof value === "boolean") return false;
+  if (Array.isArray(value)) return !value.length;
+  return !Object.values(value).some((part) => String(part ?? "").trim());
+}
+/** How many items of a section the client is answering: at least the section's minimum. */
+export function amsFormItemCount(section: AmsFormSection, answered: number): number {
+  if (!section.repeat) return 1;
+  return Math.min(section.repeat.max, Math.max(section.repeat.min, answered));
+}
+
+const EMAIL = z.string().email().max(254);
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+function validDate(value: string) {
+  if (!DATE.test(value)) return false;
+  const date = new Date(`${value}T12:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value)
+    return false;
+  const year = Number(value.slice(0, 4));
+  return year >= 1900 && year <= 2100;
+}
+/** Why one answer can't be accepted, or null. Shared by the page and the server. */
+export function amsFormFieldError(
+  field: AmsFormField,
+  value: AmsFormValue | undefined,
+  uploads = 0,
+): string | null {
+  if (field.type === "file") {
+    if (field.required && !uploads) return "Attach a file.";
+    if (uploads > AMS_FORM_UPLOADS_PER_FIELD)
+      return `Attach up to ${AMS_FORM_UPLOADS_PER_FIELD} files here.`;
+    return null;
+  }
+  if (field.type === "yesno") {
+    if (typeof value === "boolean") return null;
+    return field.required || !amsFormValueEmpty(value) ? "Choose yes or no." : null;
+  }
+  if (field.type === "address") {
+    if (amsFormValueEmpty(value)) return field.required ? "Enter the address." : null;
+    const parsed = AmsFormAddressValueSchema.safeParse(value);
+    if (!parsed.success) return "Enter the address.";
+    const { line1, city, state, postalCode } = parsed.data;
+    if (!line1 || !city) return "Enter the street and city.";
+    if (!/^[A-Za-z]{2}$/.test(state)) return "Choose the state.";
+    if (!/^\d{5}(-\d{4})?$/.test(postalCode)) return "Enter a 5-digit ZIP code.";
+    return null;
+  }
+  if (field.type === "multiselect") {
+    if (amsFormValueEmpty(value)) return field.required ? "Choose at least one." : null;
+    if (
+      !Array.isArray(value) ||
+      value.some((choice) => !field.options.includes(choice)) ||
+      new Set(value).size !== value.length
+    )
+      return "Choose from the list.";
+    return null;
+  }
+  if (amsFormValueEmpty(value)) return field.required ? "This is required." : null;
+  if (typeof value !== "string") return "Enter a value.";
+  const text = value.trim();
+  switch (field.type) {
+    case "text":
+      return text.length > 200 ? "Keep this under 200 characters." : null;
+    case "email":
+      return EMAIL.safeParse(text).success
+        ? null
+        : "Enter an email address like name@example.com.";
+    case "phone": {
+      const digits = text.replace(/\D/g, "").length;
+      return digits >= 10 && digits <= 15 && text.length <= 40
+        ? null
+        : "Enter a phone number with its area code.";
+    }
+    case "number":
+      return /^-?\d{1,12}(\.\d{1,4})?$/.test(text) ? null : "Enter a number.";
+    case "currency":
+      return /^\d{1,12}(\.\d{1,2})?$/.test(text)
+        ? null
+        : "Enter a dollar amount, like 250000.";
+    case "date":
+      return validDate(text) ? null : "Enter a valid date.";
+    case "select":
+      return field.options.includes(text) ? null : "Choose from the list.";
+    default:
+      return null;
+  }
+}
+
+export interface AmsFormIssue {
+  section: string;
+  item: number;
+  /** Empty when the problem is with the section as a whole. */
+  field: string;
+  message: string;
+}
+export interface AmsFormInput {
+  lines: string[];
+  answers: AmsFormAnswers;
+  files: Pick<AmsFormUpload, "section" | "item" | "field">[];
+}
+/** Everything that stops a submission from being accepted. */
+export function amsFormIssues(form: FormShape, input: AmsFormInput): AmsFormIssue[] {
+  const issues: AmsFormIssue[] = [];
+  if (form.lines.length > 1 && !amsFormChosenLines(form, input.lines).length)
+    issues.push({
+      section: "",
+      item: 0,
+      field: "",
+      message: "Choose at least one kind of coverage.",
+    });
+  for (const section of amsFormSections(form, input.lines)) {
+    const answered = input.answers[section.id] ?? [];
+    if (section.repeat && answered.length > section.repeat.max)
+      issues.push({
+        section: section.id,
+        item: 0,
+        field: "",
+        message: `Add up to ${section.repeat.max}.`,
+      });
+    const count = amsFormItemCount(section, answered.length);
+    for (let index = 0; index < count; index++) {
+      const item = answered[index] ?? {};
+      for (const field of amsFormVisibleFields(section, item)) {
+        const uploads = input.files.filter(
+          (file) =>
+            file.section === section.id &&
+            file.item === index &&
+            file.field === field.id,
+        ).length;
+        const message = amsFormFieldError(field, item[field.id], uploads);
+        if (message)
+          issues.push({ section: section.id, item: index, field: field.id, message });
+      }
+    }
+  }
+  return issues;
+}
+
+function cleanValue(field: AmsFormField, value: AmsFormValue): AmsFormValue {
+  if (typeof value === "string") return value.trim();
+  if (field.type === "address") return AmsFormAddressValueSchema.parse(value);
+  return value;
+}
+/**
+ * The answered questions in the order they were asked, with their labels. Call this
+ * only for input that has no issues.
+ */
+export function amsFormSnapshot(
+  form: FormShape,
+  input: AmsFormInput,
+): AmsFormSubmission["sections"] {
+  return amsFormSections(form, input.lines).flatMap((section) => {
+    const answered = input.answers[section.id] ?? [];
+    const items = Array.from(
+      { length: amsFormItemCount(section, answered.length) },
+      (_unused, index) => {
+        const item = answered[index] ?? {};
+        const answers = amsFormVisibleFields(section, item).flatMap((field) => {
+          const value = item[field.id];
+          return field.type === "file" || amsFormValueEmpty(value)
+            ? []
+            : [
+                {
+                  id: field.id,
+                  label: field.label,
+                  type: field.type,
+                  value: cleanValue(field, value!),
+                },
+              ];
+        });
+        const title = (section.repeat?.title ?? [])
+          .flatMap((id) => answers.filter((answer) => answer.id === id))
+          .map((answer) => amsFormValueText(answer.value, answer.type))
+          .join(" ")
+          .trim()
+          .slice(0, 200);
+        return { title, answers };
+      },
+    ).filter((item) => item.answers.length);
+    return items.length
+      ? [
+          {
+            id: section.id,
+            title: section.title,
+            noun: section.repeat?.noun ?? "",
+            exposure: section.exposure,
+            items,
+          },
+        ]
+      : [];
+  });
+}
+/** The submitter, read from the contact section. */
+export function amsFormContact(
+  answers: AmsFormAnswers,
+): AmsFormSubmission["contact"] {
+  const item = answers[AMS_FORM_CONTACT_SECTION]?.[0] ?? {};
+  const text = (id: string) => {
+    const value = item[id];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  return {
+    name: text(AMS_FORM_CONTACT_FIELDS.name).slice(0, 200),
+    email: text(AMS_FORM_CONTACT_FIELDS.email),
+    phone: text(AMS_FORM_CONTACT_FIELDS.phone).slice(0, 40),
+    businessName: text(AMS_FORM_CONTACT_FIELDS.business).slice(0, 200),
+  };
+}
+/** An answer as a person reads it. */
+export function amsFormValueText(value: AmsFormValue, type?: AmsFormFieldType): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object")
+    return [
+      value.line1,
+      value.line2,
+      [value.city, [value.state, value.postalCode].filter(Boolean).join(" ")]
+        .filter(Boolean)
+        .join(", "),
+    ]
+      .filter(Boolean)
+      .join(", ");
+  if (type === "currency" && /^\d+(\.\d+)?$/.test(value))
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: value.includes(".") ? 2 : 0,
+    }).format(Number(value));
+  if (type === "date" && DATE.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${month}/${day}/${year}`;
+  }
+  return value;
+}
+/** The readable start of a link: "Auto & home quote" becomes "auto-home-quote". */
+export function amsFormSlug(name: string): string {
+  return (
+    name
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40)
+      .replace(/-+$/g, "") || "form"
+  );
+}

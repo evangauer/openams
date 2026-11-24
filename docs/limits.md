@@ -52,6 +52,13 @@ The scheduler's reminder endpoint counts requests per client before checking the
 scheduler's signed token, and charges the scheduler's own allowance only after it, so
 requests from anyone else never use up the scheduler's admission.
 
+## Public forms
+
+[Hosted forms](forms.md) are the one place people outside an agency reach the API. They
+have their own per-client and per-form limits, listed in
+[Hosted forms: limits and protections](forms.md#limits-and-protections), and the files
+clients upload count toward the agency's storage limit.
+
 ## Invitation email
 
 With open sign-up and no [external access control](external-access.md), nobody vets a new

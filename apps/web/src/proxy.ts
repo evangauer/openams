@@ -20,7 +20,15 @@ function authEmulatorOrigin(dev: boolean, host = process.env.NEXT_PUBLIC_FIREBAS
   return dev && host && /^(127\.0\.0\.1|localhost):\d{2,5}$/.test(host) ? [`http://${host}`] : [];
 }
 
-export function contentSecurityPolicy(nonce: string, env = process.env.NODE_ENV) {
+/** Hosted form pages (/f/…): the only pages another site may show in a frame. */
+export const isHostedFormPath = (pathname: string) => /^\/f\/[^/]+$/.test(pathname);
+
+export function contentSecurityPolicy(
+  nonce: string,
+  env = process.env.NODE_ENV,
+  /** A hosted form an agency embeds in its own website. It reads no session. */
+  embeddable = false,
+) {
   const dev = env === "development";
   return [
     "default-src 'self'",
@@ -43,7 +51,7 @@ export function contentSecurityPolicy(nonce: string, env = process.env.NODE_ENV)
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    embeddable ? "frame-ancestors *" : "frame-ancestors 'none'",
     ...(env === "production" ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }
@@ -51,7 +59,9 @@ export function contentSecurityPolicy(nonce: string, env = process.env.NODE_ENV)
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const callback = /^\/api\/mailbox\/callback\/(gmail|microsoft365)$/.test(request.nextUrl.pathname);
-  const policy = callback ? mailboxCallbackPolicy(nonce) : contentSecurityPolicy(nonce);
+  const policy = callback
+    ? mailboxCallbackPolicy(nonce)
+    : contentSecurityPolicy(nonce, undefined, isHostedFormPath(request.nextUrl.pathname));
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", policy);

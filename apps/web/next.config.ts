@@ -41,7 +41,6 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           {
@@ -54,6 +53,12 @@ const nextConfig: NextConfig = {
             ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }]
             : []),
         ],
+      },
+      {
+        // Nothing may be framed except a hosted form (/f/…), which an agency can embed
+        // in its own website; src/proxy.ts sets the matching frame-ancestors policy.
+        source: "/((?!f/).*)",
+        headers: [{ key: "X-Frame-Options", value: "DENY" }],
       },
       {
         // Email sign-in links carry a one-time code in the URL.

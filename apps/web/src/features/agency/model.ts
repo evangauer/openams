@@ -17,6 +17,9 @@ export interface AgencySession {
   relayWorkspaceEnabled?: boolean;
   originalEmailFilingEnabled?: boolean;
   mailboxReviewEnabled?: boolean;
+  /** Hosted forms are available; publishing may still be off (the public demo). */
+  formsEnabled?: boolean;
+  formPublishingEnabled?: boolean;
   /** Team chat and presence are available in this environment. */
   chatEnabled?: boolean;
   calendarConfigured?: boolean;
@@ -70,6 +73,8 @@ export const titles: Record<AmsKind, string> = {
   journals: "General ledger",
   statements: "Carrier statements",
   suggestions: "Suggestions",
+  forms: "Forms",
+  formsubmissions: "Form submissions",
 };
 export const singular: Record<AmsKind, string> = {
   workspace: "agency setup",
@@ -95,6 +100,8 @@ export const singular: Record<AmsKind, string> = {
   journals: "journal",
   statements: "carrier statement",
   suggestions: "suggestion",
+  forms: "form",
+  formsubmissions: "form submission",
 };
 export const human = (value: string) =>
   value

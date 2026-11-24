@@ -84,6 +84,10 @@ Optional [Incoming mail](docs/mailboxes.md) supports read-only Gmail and Microso
 365 connections with a shared review and filing queue. Provider credentials and
 consent are required; the local demo leaves live connections disabled.
 
+[Hosted forms](docs/forms.md) let clients send you their information and files from a
+link. In the demo agency, open **Tools → Forms**: a sample form is live with two
+submissions waiting to be filed.
+
 ```sh
 npm run check    # release hygiene, typecheck, tests and production build
 npm run backup -- create ~/.openams/local ~/openams-backup   # local backup

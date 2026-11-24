@@ -17,6 +17,7 @@ import {
   CheckCheck,
   ChevronRight,
   ClipboardList,
+  ClipboardPen,
   CirclePlay,
   Compass,
   FileCheck2,
@@ -76,6 +77,7 @@ import { TeamChatProvider } from "./team-chat";
 import { TeamPage } from "./team";
 import { PageHeader } from "./page-header";
 import { SuggestionBox } from "./suggestions";
+import { FormsView } from "./forms";
 import { useAgencyTheme } from "./theme";
 import {
   PortalHome,
@@ -149,6 +151,7 @@ const nav: { view: View; label: string; icon: typeof Home }[] = [
   { view: "home", label: "My day", icon: Home },
   { view: "accounts", label: "Accounts", icon: UsersRound },
   { view: "inbox", label: "Incoming mail", icon: Inbox },
+  { view: "forms", label: "Forms", icon: ClipboardPen },
   { view: "renewals", label: "Renewals", icon: RefreshCw },
   { view: "tasks", label: "Tasks", icon: CheckCheck },
   { view: "services", label: "Service requests", icon: ClipboardList },
@@ -246,6 +249,7 @@ export function AgencyWorkspace({
     ...nav.map((item) => item.view),
     "certificateholders",
     "certificatetemplates",
+    "formsubmissions",
     "settings",
     ...financeKinds,
   ].includes(path as View)
@@ -703,7 +707,8 @@ export function AgencyWorkspace({
               items={nav.filter(
                 (item) =>
                   (item.view !== "financials" || session.readableKinds.includes("invoices")) &&
-                  (item.view !== "inbox" || Boolean(session.mailboxReviewEnabled && session.writableKinds.includes("correspondence"))),
+                  (item.view !== "inbox" || Boolean(session.mailboxReviewEnabled && session.writableKinds.includes("correspondence"))) &&
+                  (item.view !== "forms" || Boolean(session.formsEnabled)),
               )}
               isCurrent={(target) =>
                 view === target ||
@@ -724,7 +729,8 @@ export function AgencyWorkspace({
                 .filter(
                   (item) =>
                     (item.view !== "financials" || session.readableKinds.includes("invoices")) &&
-                    (item.view !== "inbox" || Boolean(session.mailboxReviewEnabled && session.writableKinds.includes("correspondence"))),
+                    (item.view !== "inbox" || Boolean(session.mailboxReviewEnabled && session.writableKinds.includes("correspondence"))) &&
+                    (item.view !== "forms" || Boolean(session.formsEnabled)),
                 )
                 .map(({ view: target, label, icon: Icon }) => (
                   <button
@@ -933,6 +939,18 @@ export function AgencyWorkspace({
               <AuditView book={book} />
             ) : view === "suggestions" ? (
               <SuggestionBox book={book} session={session} saved={saved} />
+            ) : view === "forms" || view === "formsubmissions" ? (
+              <FormsView
+                book={book}
+                session={session}
+                saved={saved}
+                route={
+                  view === "formsubmissions"
+                    ? ["submissions"]
+                    : [accountId, accountTab].filter(Boolean)
+                }
+                navigate={navigate}
+              />
             ) : view === "team" ? (
               <TeamPage
                 session={session}

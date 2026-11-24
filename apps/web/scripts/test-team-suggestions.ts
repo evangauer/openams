@@ -20,7 +20,12 @@ import {
 
 const roles: AmsRole[] = ["admin", "manager", "member", "accountant", "viewer"];
 const nonFinancial = AMS_KINDS.filter(
-  (kind) => !AMS_FINANCIAL_KINDS.includes(kind) && kind !== "workspace" && kind !== "suggestions" && kind !== "certificatetemplates",
+  (kind) =>
+    !AMS_FINANCIAL_KINDS.includes(kind) &&
+    kind !== "workspace" &&
+    kind !== "suggestions" &&
+    kind !== "certificatetemplates" &&
+    kind !== "forms",
 );
 
 // The role guide must describe what the permission rules actually allow.
@@ -45,6 +50,14 @@ for (const kind of ["notes", "tasks", "documents"] as const)
 assert.ok(nonFinancial.every((kind) => amsCanWrite("member", kind) || kind === "policychanges" || kind === "reminders" || kind === "correspondence"));
 assert.ok(nonFinancial.every((kind) => !amsCanWrite("viewer", kind)), "viewers change no records");
 assert.ok(roles.every((role) => amsCanWrite(role, "suggestions")), "everyone may suggest");
+// Hosted forms: what the agency shows the public is set up by administrators and managers;
+// the people who work accounts file what clients send.
+assert.ok(amsCanWrite("admin", "forms") && amsCanWrite("manager", "forms"));
+for (const role of ["member", "accountant", "viewer"] as const)
+  assert.ok(!amsCanWrite(role, "forms"), `${role} does not publish forms`);
+assert.ok(amsCanWrite("member", "formsubmissions"), "members file form submissions");
+assert.ok(!amsCanWrite("accountant", "formsubmissions") && !amsCanWrite("viewer", "formsubmissions"));
+assert.ok(roles.every((role) => amsCanRead(role, "forms") && amsCanRead(role, "formsubmissions")));
 // Team management claims.
 assert.ok(roles.every((role) => canAssignRole("admin", role)), "administrators invite anyone");
 assert.ok(!canAssignRole("manager", "admin") && canAssignRole("manager", "member"));
