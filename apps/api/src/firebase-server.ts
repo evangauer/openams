@@ -15,6 +15,7 @@ import { AmsError } from "./repository.js";
 import { FirestoreAmsRepository } from "./firebase/firestore-repository.js";
 import { FirestoreAmsChat } from "./firebase/firestore-chat.js";
 import { FirestoreFormLinks } from "./firebase/firestore-form-links.js";
+import { FORM_PENDING_PREFIX } from "./form-links.js";
 import { CloudStorageAmsFiles } from "./firebase/storage-files.js";
 import {
   createFirebaseAuthenticate,
@@ -250,6 +251,13 @@ app.use(
     chat: new FirestoreAmsChat(db),
     forms: {
       links: new FirestoreFormLinks(db),
+      // Unsent uploads wait under their own prefix, outside any agency's storage count.
+      // Give the bucket a lifecycle rule that deletes what is left there (docs/forms.md).
+      pending: new CloudStorageAmsFiles(bucket, { prefix: FORM_PENDING_PREFIX }),
+      // A form is a public page under this deployment's name. Where anyone can create
+      // an agency and nothing vets them, forms are built and previewed but not published
+      // (the same reasoning that limits such an agency's invitation email).
+      publishing: signupModeFromEnv() !== "open" || accessConfig.enabled,
       // With external access control on, only an active agency's public forms stay open.
       accepting: async (agencyId) =>
         ((await accessControl.access(agencyId))?.state ?? "active") === "active",

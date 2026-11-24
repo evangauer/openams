@@ -16,7 +16,7 @@ import {
   type AmsMember,
   type AmsRecord,
 } from "@openams/contracts";
-import { AmsError, type AmsRepository } from "./repository.js";
+import { AmsError, digest, type AmsRepository } from "./repository.js";
 import { AmsService } from "./service.js";
 import { calendarDays } from "./task-follow-up.js";
 import { fileOriginalEmail } from "./correspondence.js";
@@ -465,12 +465,14 @@ export class LocalAmsDemo {
           "demo_form_invalid",
           `The sample submission no longer fits the sample form: ${issues[0].section}.${issues[0].field}.`,
         );
+      const sections = amsFormSnapshot(form.data, input);
       await service.receiveFormSubmission(tenantId, form, {
         submissionId,
         lines: amsFormChosenLines(form.data, sample.lines),
-        contact: amsFormContact(sample.answers),
-        sections: amsFormSnapshot(form.data, input),
+        contact: amsFormContact(sections),
+        sections,
         files: [],
+        digest: digest(input),
       });
     }
     // An open sandbox never hosts a public form: the sample is left paused there.

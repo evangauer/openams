@@ -130,6 +130,14 @@ export function draftProblems(draft: FormDraft): string[] {
   if (!draft.name.trim()) problems.push("Give the form a name.");
   if (!draft.title.trim()) problems.push("Give the form a headline.");
   if (!draft.branding.agencyName.trim()) problems.push("Add your agency's name.");
+  if (draft.sections.length > FORM_MAX_SECTIONS)
+    problems.push(
+      `A form holds up to ${FORM_MAX_SECTIONS} sections and this one has ${draft.sections.length}. Take a line of business or a section off, or split it into two forms.`,
+    );
+  else if (questionCount(draft) > FORM_MAX_QUESTIONS)
+    problems.push(
+      `A form holds up to ${FORM_MAX_QUESTIONS} questions and this one has ${questionCount(draft)}. Take a line of business off, or split it into two forms.`,
+    );
   for (const section of draft.sections) {
     if (!section.title.trim()) problems.push("Every section needs a title.");
     for (const field of section.fields) {
@@ -157,14 +165,26 @@ export function previewForm(draft: FormDraft): AmsPublicForm {
     "preview",
   );
 }
-/** A new section or question id that nothing on the form uses yet. */
+/**
+ * A new section or question id. Random, so the id of a removed question is never given
+ * to a new one: an answer a client already typed can't attach itself to a different
+ * question.
+ */
 export function newKey(prefix: string, taken: Iterable<string>): string {
   const used = new Set(taken);
-  for (let number = 1; ; number++) {
-    const key = `${prefix}_${number}`;
-    if (!used.has(key)) return key;
+  for (;;) {
+    const key = `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
+    if (/^[a-z][a-z0-9_]{0,39}$/.test(key) && !used.has(key)) return key;
   }
 }
+/** The most a form can hold (packages/contracts/src/forms.ts). */
+export const FORM_MAX_SECTIONS = 40;
+export const FORM_MAX_QUESTIONS = 300;
+export const questionCount = (draft: Pick<FormDraft, "sections">) =>
+  draft.sections.reduce((total, section) => total + section.fields.length, 0);
+/** Whether a draft is within what one form can hold. */
+export const fitsOneForm = (draft: Pick<FormDraft, "sections">) =>
+  draft.sections.length <= FORM_MAX_SECTIONS && questionCount(draft) <= FORM_MAX_QUESTIONS;
 export const sectionSummary = (section: AmsFormSection) =>
   [
     `${section.fields.length} ${section.fields.length === 1 ? "question" : "questions"}`,
@@ -209,6 +229,11 @@ export interface AccountMatch {
   account: AmsRecord<"accounts">;
   /** Why this account is suggested, for the person filing. */
   reason: string;
+  /**
+   * The same email or phone number. A name alone is offered but never chosen for the
+   * person filing: anyone can type a client's name into a public form.
+   */
+  strong: boolean;
 }
 /** Accounts a submission probably belongs to: same email, phone or name. Best first. */
 export function matchingAccounts(book: Book, submission: SubmissionRecord): AccountMatch[] {
@@ -249,7 +274,7 @@ export function matchingAccounts(book: Book, submission: SubmissionRecord): Acco
     })
     .sort((a, b) => b.score - a.score || a.account.data.name.localeCompare(b.account.data.name))
     .slice(0, 4)
-    .map(({ account, reason }) => ({ account, reason }));
+    .map(({ account, reason, score }) => ({ account, reason, strong: score >= 3 }));
 }
 /** What filing will add to the account, in words: "2 drivers, 1 vehicle". */
 export function exposureSummary(submission: SubmissionRecord): string {

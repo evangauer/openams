@@ -55,11 +55,21 @@ an agency asks, and the consent wording it shows, are the agency's to review.
 The page shows the agency's name, color and logo. The client picks what they want a quote
 for, moves through one section per step, attaches files where asked, reviews everything
 and sends it. Answers are kept in that browser tab's session storage, so a refresh does
-not lose them; they leave the device only when the client presses Send. Sending twice
-never saves a submission twice.
+not lose them; they leave the device only when the client presses Send. Files upload as
+they are attached, and one the client removes is deleted.
 
 Uploads: PDF, JPG, PNG, DOCX, XLSX or CSV, up to 10 MB each, five per question and ten per
 submission. Each file's type is checked against its contents.
+
+Two things the page is careful about:
+
+- **A form that changed mid-visit.** If the agency edits a live form while a client is
+  filling it in, the client's Send is not saved. They are shown the current questions
+  with their answers in place and send again, so an answer is never filed under wording
+  the client did not read.
+- **Sending twice.** One page visit is one submission. Sending the same answers again is
+  simply confirmed. If a first send was saved and the client then changes something and
+  sends again, they are told the first answers were kept and the changes were not.
 
 ## Submissions and filing
 
@@ -104,31 +114,55 @@ cannot be created by hand.
 
   | Route | Purpose |
   | --- | --- |
-  | `GET /public/forms/:link` | The questions and the look, or "closed" with the agency's name and contact details. Internal fields (the form's own name, owner, follow-up settings) are never included. |
+  | `GET /public/forms/:link` | The questions and the look, or "closed" with the agency's name and contact details. Internal fields (owner, follow-up settings) are never included. |
   | `POST /public/forms/:link/upload-check` | Asked by the web app before it reads a file. |
-  | `POST /public/forms/:link/files` | One file, stored under this submission only. |
+  | `POST /public/forms/:link/files` | One file, held for this submission only until it is sent. |
+  | `POST /public/forms/:link/files/remove` | Deletes a file the client took back. |
   | `POST /public/forms/:link/submissions` | The answers. Checked against the current form, then saved with its follow-up task. |
 
   The web app serves the page at `/f/<link>` and forwards the client's requests from
   `/api/forms/<link>/…`. It never reads or sends a session cookie on these routes.
 - **Optional.** Forms are a router dependency (`forms` in `createAmsRouter`), like team
-  chat and incoming mail. Without it the workspace hides Forms and no link resolves.
+  chat and incoming mail: the link index, a store for uploads waiting to be sent, and
+  whether publishing is on. Without it the workspace hides Forms and no link resolves.
 
 ## Limits and protections
 
 | | |
 | --- | --- |
 | Reading a form | 300 a minute per client |
-| Sending a submission | 20 a minute per client, and 40 at once then 1 every 2 minutes per form on each API process |
-| Uploading a file | 40 a minute per client; per form on each API process, 60 at once then 1 a minute, and 500 MB a day |
+| Sending a submission | 20 a minute per client. Per form on each API process: 40 saved at once, then 1 every 2 minutes |
+| Uploading a file | 40 a minute per client. Per form on each API process: 60 stored at once, then 1 a minute, and 500 MB a day |
 | Size | 300 KB of answers; a submission record stays under the usual 128 KB |
 | Scripts | A field people never see, and a minimum time on the page. A refused submission is told so; nothing is silently dropped. |
 
-Per-client limits need `AMS_CLIENT_ADDRESS_DEPTH`
-([Per-agency limits](limits.md#client-admission-limits)); without it every client shares
-one limit per API process. Uploads count toward the agency's storage limit. A file a
-client uploads and then never submits is not listed anywhere and is not removed
-automatically.
+Only what is saved or stored spends a per-form limit, so requests that are refused cannot
+close a form to real clients. Per-client limits need `AMS_CLIENT_ADDRESS_DEPTH`
+([Per-agency limits](limits.md#client-admission-limits)). Without it they are kept per
+link instead, so traffic to one form never closes another agency's forms.
+
+**Uploads wait before they count.** A file a client attaches is held under
+`form-uploads/<agency>/…`, apart from the agency's documents and outside its storage
+limit. When the form is sent, the file is checked again, copied to the agency's documents
+(`ams-documents/<agency>/forms/…`, which does count toward storage) and the waiting copy
+is deleted. Files left waiting by a client who never sends the form have to expire:
+
+- Locally, the API deletes them after two days.
+- On Cloud Storage, add a lifecycle rule to the bucket. Nothing else lives under that
+  prefix:
+
+  ```json
+  {
+    "rule": [
+      {
+        "action": { "type": "Delete" },
+        "condition": { "age": 2, "matchesPrefix": ["form-uploads/"] }
+      }
+    ]
+  }
+  ```
+
+  `gcloud storage buckets update gs://YOUR_BUCKET --lifecycle-file=lifecycle.json`
 
 Other protections:
 
@@ -139,16 +173,24 @@ Other protections:
 - Form pages ask search engines not to index them.
 - The form tells the client, on every step, who receives the answers and not to enter
   passwords or card numbers.
+- The link begins with the form's name as it was when first published; choose a name you
+  are happy for clients to see. Nothing else internal (owner, follow-up settings) is sent
+  to a visitor.
 - With [external access control](external-access.md), only an active agency's forms take
   submissions; any other state shows the closed page.
+- **Who may publish.** A form is a public page under the deployment's own address. Where
+  anyone can create an agency (`AMS_SIGNUP=open`) and nothing vets them (no external
+  access control), forms can be built and previewed but not published, for the same
+  reason such an agency's invitation email is limited. Single-agency deployments, and
+  open sign-up with external access control, publish normally.
 - In the [public demo](public-demo.md), forms can be built and previewed but not
   published, because anyone can open a sandbox there. The sample form is paused and no
   link opens.
 - Locally, the page follows the evaluation build's rule: loopback only.
 
-Before a deployment that anyone on the internet can sign up to accepts public
-submissions, put a per-client rate limit at the edge and decide whether your forms need
-bot protection there; the limits above bound a flood, they do not identify a person.
+Before a deployment on the public internet accepts submissions, put a per-client rate
+limit at the edge and decide whether your forms need bot protection there; the limits
+above bound a flood, they do not identify a person.
 
 ## On the roadmap
 

@@ -164,6 +164,8 @@ Engineering:
 - [ ] Incident response runbook: who is paged, how to revoke sessions
       (`revokeRefreshTokens`) and deactivate members, and who you must notify
 - [ ] Data export and deletion procedures, tested
+- [ ] If you publish [hosted forms](forms.md): the bucket lifecycle rule that expires
+      unsent uploads, `AMS_CLIENT_ADDRESS_DEPTH`, and a per-client rate limit at the edge
 
 Policy (with counsel):
 

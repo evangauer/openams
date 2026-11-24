@@ -400,6 +400,11 @@ export const AmsFormSubmissionSchema = z
     filedBy: reference,
     dismissReason: z.string().trim().max(500).default(""),
     submittedAt: z.string().datetime(),
+    /**
+     * A fingerprint of what the client sent. A repeat of the same send is the same
+     * submission; a repeat with other answers is told the first ones were kept.
+     */
+    digest: Sha256,
   })
   .strict();
 export type AmsFormSubmission = z.infer<typeof AmsFormSubmissionSchema>;
@@ -578,7 +583,9 @@ export function amsFormFieldError(
     case "date":
       return validDate(text) ? null : "Enter a valid date.";
     case "select":
-      return field.options.includes(text) ? null : "Choose from the list.";
+      // Exactly one of the choices: a padded "Yes " must not pass here and then miss the
+      // condition of a question that depends on it.
+      return field.options.includes(value) ? null : "Choose from the list.";
     default:
       return null;
   }
@@ -631,6 +638,32 @@ export function amsFormIssues(form: FormShape, input: AmsFormInput): AmsFormIssu
       }
     }
   }
+  // Every file sits on a file question the client was asked, for an item they answered.
+  const sections = amsFormSections(form, input.lines);
+  for (const file of input.files) {
+    const section = sections.find((item) => item.id === file.section);
+    const answered = input.answers[file.section] ?? [];
+    if (
+      !section ||
+      file.item >= amsFormItemCount(section, answered.length) ||
+      !amsFormVisibleFields(section, answered[file.item] ?? {}).some(
+        (field) => field.id === file.field && field.type === "file",
+      )
+    )
+      issues.push({
+        section: file.section,
+        item: file.item,
+        field: file.field,
+        message: "Remove this file and attach it again.",
+      });
+  }
+  if (input.files.length > AMS_FORM_UPLOAD_MAX_FILES)
+    issues.push({
+      section: input.files[AMS_FORM_UPLOAD_MAX_FILES].section,
+      item: input.files[AMS_FORM_UPLOAD_MAX_FILES].item,
+      field: input.files[AMS_FORM_UPLOAD_MAX_FILES].field,
+      message: `This form takes up to ${AMS_FORM_UPLOAD_MAX_FILES} files in all. Remove one.`,
+    });
   return issues;
 }
 
@@ -674,8 +707,10 @@ export function amsFormSnapshot(
           .slice(0, 200);
         return { title, answers };
       },
-    ).filter((item) => item.answers.length);
-    return items.length
+    );
+    // Items keep their place (a file names its item by position); a section with
+    // nothing answered at all is left out.
+    return items.some((item) => item.answers.length)
       ? [
           {
             id: section.id,
@@ -688,13 +723,18 @@ export function amsFormSnapshot(
       : [];
   });
 }
-/** The submitter, read from the contact section. */
+/**
+ * The submitter, read from the contact section of a snapshot: only answers to questions
+ * the form asks, already checked.
+ */
 export function amsFormContact(
-  answers: AmsFormAnswers,
+  sections: AmsFormSubmission["sections"],
 ): AmsFormSubmission["contact"] {
-  const item = answers[AMS_FORM_CONTACT_SECTION]?.[0] ?? {};
+  const answers =
+    sections.find((section) => section.id === AMS_FORM_CONTACT_SECTION)?.items[0]
+      ?.answers ?? [];
   const text = (id: string) => {
-    const value = item[id];
+    const value = answers.find((answer) => answer.id === id)?.value;
     return typeof value === "string" ? value.trim() : "";
   };
   return {

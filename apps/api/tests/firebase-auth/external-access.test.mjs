@@ -102,6 +102,7 @@ before(async () => {
       // As the Firebase server composes it: only an active agency's forms stay open.
       forms: {
         links: new FirestoreFormLinks(db),
+        pending: new LocalAmsFiles(join(dir, "files")),
         accepting: async (tenantId) => ((await control.access(tenantId))?.state ?? "active") === "active",
       },
     }),

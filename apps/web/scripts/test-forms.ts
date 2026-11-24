@@ -2,12 +2,13 @@
 // belongs to, and the one place another site may frame this app.
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { AmsFormSchema, amsFormFromCatalog } from "@openams/contracts";
+import { AMS_FORM_CATALOG, AmsFormSchema, amsFormFromCatalog } from "@openams/contracts";
 import { contentSecurityPolicy, isHostedFormPath, proxy } from "../src/proxy";
 import {
   draftProblems,
   embedSnippet,
   exposureSummary,
+  fitsOneForm,
   formNameFor,
   formUrl,
   isLoopback,
@@ -83,7 +84,15 @@ assert.deepEqual(tidyDraft(edited).sections.find((section) => section.id === "au
 // The preview is what a client would get: no owner, no internal name.
 const preview = previewForm(draft);
 assert.deepEqual(Object.keys(preview).sort(), ["branding", "confirmation", "consent", "intro", "lines", "linkId", "revision", "sections", "title"]);
-assert.equal(newKey("question", ["question_1", "question_2"]), "question_3");
+// New ids are random: the id of a removed question is never handed to a new one.
+const keys = new Set(Array.from({ length: 200 }, () => newKey("question", [])));
+assert.ok(keys.size > 190);
+for (const key of keys) assert.match(key, /^question_[a-z0-9]{1,6}$/);
+// A form past what one form holds says so in plain words.
+const everything = newFormDraft(agency, AMS_FORM_CATALOG.map((line) => line.id));
+assert.ok(!fitsOneForm(everything));
+assert.match(draftProblems(everything)[0], /holds up to 40 sections/);
+assert.ok(fitsOneForm(newFormDraft(agency, ["auto", "home", "renters", "umbrella"])));
 
 // Sharing: the link, and an embed that only listens to the form's own origin.
 assert.equal(formUrl("https://ams.example.test", "auto-quote-abcdefghjk"), "https://ams.example.test/f/auto-quote-abcdefghjk");
@@ -141,6 +150,8 @@ const book: Book = {
 const matches = matchingAccounts(book, submission({ name: "Dana Fixture", email: "dana@client.example.test", phone: "(555) 010-0199" }));
 assert.deepEqual(matches.map((match) => match.account.id), ["a-email", "a-contact", "a-phone", "a-name"]);
 assert.equal(matches[0].reason, "Same email");
+// A name alone is offered but never chosen for the person filing.
+assert.deepEqual(matches.map((match) => match.strong), [true, true, true, false]);
 assert.match(matches[1].reason, /Contact Dana F\. has this email/);
 assert.deepEqual(matchingAccounts(book, submission({ name: "Nobody Known", email: "nobody@client.example.test" })), []);
 assert.equal(

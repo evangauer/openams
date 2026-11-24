@@ -427,6 +427,12 @@ function SubmissionDetail({
   const [filing, setFiling] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const reopen = useAccountCommand(saved);
+  // Filing or dismissing takes a submission out of the New list. Keep it on screen so the
+  // person sees where it went, instead of the next one sliding into its place.
+  const savedHere = (records: AmsRecord[]) => {
+    saved(records);
+    navigate(`forms/submissions/${submission.id}`);
+  };
   const { data } = submission;
   const canFile =
     session.writableKinds.includes("formsubmissions") && session.writableKinds.includes("accounts");
@@ -580,12 +586,16 @@ function SubmissionDetail({
         <FileDialog
           submission={submission}
           book={book}
-          saved={saved}
+          saved={savedHere}
           close={() => setFiling(false)}
         />
       )}
       {dismissing && (
-        <DismissDialog submission={submission} saved={saved} close={() => setDismissing(false)} />
+        <DismissDialog
+          submission={submission}
+          saved={savedHere}
+          close={() => setDismissing(false)}
+        />
       )}
     </article>
   );
@@ -605,7 +615,9 @@ function FileDialog({
   const { contact, sections, files } = submission.data;
   const matches = useMemo(() => matchingAccounts(book, submission), [book, submission]);
   const commercial = Boolean(contact.businessName);
-  const [target, setTarget] = useState<string>(matches[0]?.account.id ?? "new");
+  const [target, setTarget] = useState<string>(
+    matches[0]?.strong ? matches[0].account.id : "new",
+  );
   const [name, setName] = useState(contact.businessName || contact.name);
   const [type, setType] = useState<"business" | "person">(commercial ? "business" : "person");
   const [query, setQuery] = useState("");
@@ -633,10 +645,6 @@ function FileDialog({
         )
         .slice(0, 5)
     : [];
-  const answerCount = sections.reduce(
-    (total, section) => total + section.items.reduce((sum, item) => sum + item.answers.length, 0),
-    0,
-  );
   return (
     <Dialog open onOpenChange={(open) => !open && !mutation.busy && close()}>
       <DialogContent className="agency-dialog fm-dialog">
@@ -734,7 +742,7 @@ function FileDialog({
             )}
             <p>
               <Check size={14} />
-              {answerCount} answers as a note on the account
+              The answers as a note on the account
             </p>
             {files.length > 0 && (
               <p>

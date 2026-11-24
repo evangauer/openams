@@ -45,6 +45,7 @@ import {
   draftOf,
   draftProblems,
   embedSnippet,
+  fitsOneForm,
   formNameFor,
   formUrl,
   isLoopback,
@@ -143,7 +144,15 @@ export function FormBuilder({
   /** Called with a new form's id after its first save, so the address can follow. */
   opened: (id: string) => void;
 }) {
-  const savedDraft = useMemo(() => (record ? draftOf(record) : initial), [record, initial]);
+  const savedDraft = useMemo(() => {
+    const saved = record ? draftOf(record) : initial;
+    // A form outlives the person it was assigned to: show it as the agency default
+    // (which is where its follow-ups now go) and save it that way.
+    return saved.ownerId &&
+      !session.members.some((member) => member.id === saved.ownerId && member.active)
+      ? { ...saved, ownerId: null }
+      : saved;
+  }, [record, initial, session.members]);
   const [draft, setDraft] = useState<FormDraft>(savedDraft);
   const [restored, setRestored] = useState(false);
   const step: StepId = chosenStep ?? (record ? "questions" : "coverage");
@@ -152,6 +161,7 @@ export function FormBuilder({
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
   const [logoError, setLogoError] = useState("");
+  const [lineLimit, setLineLimit] = useState(false);
   const [autoName, setAutoName] = useState(!record);
   const pendingPublish = useRef<string | null>(null);
   const lastSaved = useRef<FormRecord | null>(null);
@@ -208,13 +218,16 @@ export function FormBuilder({
       fields: section.fields.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)),
     }));
   function toggleLine(id: string) {
-    setDraft((previous) => {
-      const next = previous.lines.some((line) => line.id === id)
-        ? amsFormRemoveLine(previous, id)
-        : amsFormAddLine(previous, id);
-      const merged = { ...previous, ...next };
-      return autoName ? { ...merged, name: formNameFor(merged) } : merged;
-    });
+    const adding = !draft.lines.some((line) => line.id === id);
+    const next = adding ? amsFormAddLine(draft, id) : amsFormRemoveLine(draft, id);
+    // One form holds only so much; past that, a second form is the better tool.
+    if (adding && !fitsOneForm(next)) {
+      setLineLimit(true);
+      return;
+    }
+    setLineLimit(false);
+    const merged = { ...draft, ...next };
+    setDraft(autoName ? { ...merged, name: formNameFor(merged) } : merged);
   }
   function moveSection(index: number, by: number) {
     setDraft((previous) => {
@@ -431,9 +444,17 @@ export function FormBuilder({
                     </div>
                   </section>
                 ))}
-                <p className="fb-note">
-                  No line fits? Leave them all off and write your own questions in the next step.
-                </p>
+                {lineLimit ? (
+                  <p className="fb-note" role="status">
+                    That line would take this form past what one form holds (40 sections,
+                    300 questions). Take another line off first, or build a second form:
+                    clients answer shorter forms more often anyway.
+                  </p>
+                ) : (
+                  <p className="fb-note">
+                    No line fits? Leave them all off and write your own questions in the next step.
+                  </p>
+                )}
               </>
             )}
             {step === "questions" && (
@@ -678,7 +699,9 @@ export function FormBuilder({
                   </>
                 ) : session.formPublishingEnabled === false ? (
                   <p className="fb-lead">
-                    The demo is shared with everyone who tries OpenAMS, so public links stay off here. Build the form and run the preview on the right: it is the same page a client fills in. In your own agency this step gives you the link, a QR code and the code for your website.
+                    {session.demo
+                      ? "The demo is shared with everyone who tries OpenAMS, so public links stay off here. Build the form and run the preview on the right: it is the same page a client fills in. In your own agency this step gives you the link, a QR code and the code for your website."
+                      : "Public form links are turned off on this deployment. You can build the form and run the preview on the right, which is the same page a client fills in. Whoever runs this deployment can turn publishing on."}
                   </p>
                 ) : (
                   <>

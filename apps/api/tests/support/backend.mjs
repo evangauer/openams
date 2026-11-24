@@ -73,3 +73,11 @@ export function openFiles(dir) {
     firebase.storage.bucket(rootFor(dir).replaceAll("_", "-")),
   );
 }
+/** Where unsent form uploads wait: the same folder locally, its own prefix in Cloud Storage. */
+export function openPendingFiles(dir) {
+  if (backend === "sqlite") return new LocalAmsFiles(dir);
+  return new firebase.CloudStorageAmsFiles(
+    firebase.storage.bucket(rootFor(dir).replaceAll("_", "-")),
+    { prefix: "form-uploads" },
+  );
+}

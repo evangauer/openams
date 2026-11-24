@@ -15,11 +15,11 @@ import {
   amsFormSections,
 } from "@openams/contracts";
 import { createAmsRouter } from "../dist/routes.js";
-import { MemoryFormLinks, formSubmissionId, newFormLinkId } from "../dist/form-links.js";
-import { openRepository, openFiles } from "./support/backend.mjs";
+import { MemoryFormLinks, formPendingKey, formSubmissionId, formUploadKey, newFormLinkId } from "../dist/form-links.js";
+import { openRepository, openFiles, openPendingFiles } from "./support/backend.mjs";
 
 const PDF = Buffer.from("%PDF-1.4\n% fixture declarations page\n");
-const members = [
+const team = () => [
   { id: "user-admin", name: "Avery Admin", email: "avery@agency.example.test", role: "admin", active: true },
   { id: "user-member", name: "Morgan Member", email: "morgan@agency.example.test", role: "member", active: true },
 ];
@@ -28,7 +28,9 @@ async function harness(t, forms = {}) {
   const dir = await mkdtemp(join(tmpdir(), "ams-forms-"));
   const repository = openRepository(join(dir, "agency.sqlite"));
   const links = new MemoryFormLinks();
-  const state = { accepting: true };
+  const pending = openPendingFiles(join(dir, "files"));
+  const state = { accepting: true, members: team() };
+  const files = openFiles(join(dir, "files"));
   const app = express();
   app.use(express.json({ limit: "300kb" }));
   app.use(
@@ -42,11 +44,11 @@ async function harness(t, forms = {}) {
       },
       enabled: async () => true,
       repository: () => repository,
-      files: openFiles(join(dir, "files")),
-      members: async () => members,
+      files,
+      members: async () => state.members,
       workspaceName: async () => "Fixture agency",
       timeZone: async () => "America/Chicago",
-      forms: { links, accepting: async () => state.accepting, ...forms },
+      forms: { links, pending, accepting: async () => state.accepting, ...forms },
     }),
   );
   app.use((error, _req, res, _next) =>
@@ -64,6 +66,8 @@ async function harness(t, forms = {}) {
   const api = {
     state,
     links,
+    files,
+    pending,
     get: (path, token = "admin") =>
       fetch(url + path, { headers: token ? { authorization: `Bearer ${token}` } : {} }),
     post: (path, body, token = "admin") =>
@@ -97,6 +101,8 @@ async function harness(t, forms = {}) {
         body: bytes,
       }).then(json),
     publicGet: (link) => fetch(`${url}/public/forms/${link}`).then(json),
+    removeUpload: (link, submission, sha256) =>
+      api.post(`/public/forms/${link}/files/remove?submission=${submission}`, { sha256 }, null),
     submit: (link, body) => api.post(`/public/forms/${link}/submissions`, body, null),
   };
   return api;
@@ -186,6 +192,20 @@ test("answers are checked the same way for the page and the server", () => {
   assert.ok(!at("auto_drivers", 0, "incidents_detail"), "a hidden follow-up question is not");
   assert.ok(at("auto_vehicles", 0, "year"));
   assert.ok(at("auto_vehicles", 1, "make"), "an added item is checked like the first");
+  // A choice is one of the choices exactly: a padded answer must not slip past the
+  // condition of the question that depends on it.
+  const padded = autoAnswers();
+  padded.auto_current[0].insured = true;
+  padded.auto_drivers[0].marital_status = "Married ";
+  assert.ok(amsFormIssues(form, { lines: [], answers: padded, files: [] }).some((issue) => issue.field === "marital_status"));
+  // A file sits on a file question, for an item the client answered; ten files in all.
+  const file = (item, field = "declarations", section = "auto_current") => ({ section, item, field });
+  const filed = (files) => amsFormIssues(form, { lines: [], answers: autoAnswers(), files });
+  assert.deepEqual(filed([file(0)]), []);
+  assert.equal(filed([file(3)]).length, 1, "an item nobody answered");
+  assert.equal(filed([file(0, "carrier")]).length, 1, "not a file question");
+  assert.equal(filed([file(0, "license", "auto_drivers")]).length, 1, "no such question");
+  assert.ok(filed([...Array(5).fill(file(0)), ...Array(6).fill(file(0, "documents", "wrap_up"))]).length >= 1, "more than ten files");
   // A form must open with a contact section that asks for a name and an email.
   const noContact = autoForm();
   noContact.sections = noContact.sections.slice(1);
@@ -263,17 +283,35 @@ test("a published form takes a submission with files, and staff file it to a new
   const sent = await api.submit(link, body);
   assert.equal(sent.status, 201, JSON.stringify(sent.body));
   assert.deepEqual(sent.body, { ok: true });
-  // The same page submitting again is the same submission, even with other answers.
+  // The same page sending the same answers again is the same submission. With other
+  // answers it is told the first ones were kept: never thanked for what wasn't saved.
   assert.equal((await api.submit(link, body)).status, 200);
   const changed = structuredClone(body);
   changed.answers.wrap_up[0].notes = "Different";
-  assert.equal((await api.submit(link, changed)).status, 200);
+  const second = await api.submit(link, changed);
+  assert.equal(second.status, 409);
+  assert.equal(second.body.error, "already_received");
+  // Until it was sent the file waited apart from the agency's documents; now it is with
+  // them, and the waiting copy is gone.
+  const savedId = formSubmissionId(form.id, page);
+  await assert.rejects(api.pending.get(formPendingKey("agency-1", savedId, uploaded.body.sha256)));
+  assert.deepEqual(await api.files.get(formUploadKey("agency-1", savedId, uploaded.body.sha256)), PDF);
+  // A file the client takes back before sending is deleted, not kept.
+  const other = randomUUID();
+  const kept = await api.upload(link, other, "second.pdf", Buffer.concat([PDF, Buffer.from("second")]));
+  const waiting = formPendingKey("agency-1", formSubmissionId(form.id, other), kept.body.sha256);
+  assert.equal((await api.pending.get(waiting)).length, kept.body.bytes);
+  assert.equal((await api.removeUpload(link, other, kept.body.sha256)).status, 200);
+  await assert.rejects(api.pending.get(waiting));
+  assert.equal((await api.removeUpload(link, other, kept.body.sha256)).status, 200, "removing twice is fine");
+  assert.equal((await api.removeUpload(link, "nope", kept.body.sha256)).status, 400);
   const submissions = await api.list("formsubmissions");
   assert.equal(submissions.length, 1);
   let submission = submissions[0];
   assert.equal(submission.id, formSubmissionId(form.id, page));
   assert.equal(submission.createdBy, "ams_forms");
   assert.equal(submission.data.status, "new");
+  assert.match(submission.data.digest, /^[a-f0-9]{64}$/);
   assert.deepEqual(submission.data.contact, { name: "Dana Fixture", email: "dana@client.example.test", phone: "(555) 010-0199", businessName: "" });
   assert.deepEqual(submission.data.lines, [{ id: "auto", label: "Auto" }]);
   const drivers = submission.data.sections.find((section) => section.id === "auto_drivers");
@@ -359,9 +397,22 @@ test("pausing, access and editing decide whether a link is open", async (t) => {
   form = edited.body.records[0];
   assert.equal(form.data.status, "published");
   const outdated = await api.submit(link, stale);
-  assert.equal(outdated.status, 422);
+  assert.equal(outdated.status, 409);
+  assert.equal(outdated.body.error, "form_updated");
   assert.equal(outdated.body.form.revision, form.revision);
   assert.deepEqual(outdated.body.issues.map((issue) => issue.field), ["referral"]);
+  // Even when the old answers would pass, an answer is never filed under wording the
+  // client did not read: they are shown the current form and send again.
+  const reworded = structuredClone(form.data.sections);
+  reworded.at(-1).fields[0].required = false;
+  reworded[1].fields.find((field) => field.id === "incidents").label = "Confirm: no accidents or tickets in the last 5 years";
+  const before = form.revision;
+  form = (await api.command("forms", "update", { sections: reworded }, form)).body.records[0];
+  const unread = await api.submit(link, { ...body(), revision: before });
+  assert.equal(unread.status, 409);
+  assert.equal(unread.body.error, "form_updated");
+  assert.deepEqual(unread.body.issues, []);
+  assert.equal((await api.list("formsubmissions")).length, 0);
   const current = body();
   current.answers.wrap_up[0].referral = "A neighbor";
   assert.equal((await api.submit(link, current)).status, 201);
@@ -373,6 +424,8 @@ test("pausing, access and editing decide whether a link is open", async (t) => {
   assert.equal((await api.publicGet(link)).body.status, "closed");
   assert.equal((await api.submit(link, body())).status, 409);
   assert.equal((await api.upload(link, randomUUID(), "dec.pdf", PDF)).status, 409);
+  // A client whose answers were saved before the pause is still told so on a retry.
+  assert.deepEqual(await api.submit(link, current), { status: 200, body: { ok: true } });
   form = (await api.post(`/ams/forms/${form.id}/publish`, { commandId: randomUUID(), expectedVersion: form.version })).body.records[0];
   assert.equal(form.data.linkId, link);
   assert.equal((await api.publicGet(link)).body.status, "open");
@@ -442,6 +495,64 @@ test("a form takes only so many uploaded bytes a day", async (t) => {
   assert.equal(edited.status, 200, JSON.stringify(edited.body));
   assert.equal((await check()).status, 422);
   assert.equal((await api.upload(form.data.linkId, randomUUID(), "three.pdf", PDF)).status, 422);
+});
+
+test("only what is saved spends a form's allowance, and one link's traffic stays its own", async (t) => {
+  const api = await harness(t, { burst: { submissions: 2, uploads: 2 } });
+  const form = await published(api);
+  const link = form.data.linkId;
+  const body = (extra = {}) => ({ id: randomUUID(), revision: form.revision, lines: [], answers: autoAnswers(), files: [], elapsedMs: 60_000, ...extra });
+  const missing = { section: "auto_current", item: 0, field: "declarations", name: "dec.pdf", sha256: "b".repeat(64), bytes: 10 };
+  // Requests that save nothing (a file that was never uploaded, a check before an
+  // upload) take nothing from the form: a real client is not shut out by them.
+  for (let count = 0; count < 5; count++) {
+    assert.equal((await api.submit(link, body({ files: [missing] }))).body.error, "upload_missing");
+    assert.equal((await api.post(`/public/forms/${link}/upload-check`, {}, null)).status, 200);
+  }
+  assert.equal((await api.submit(link, body())).status, 201);
+  assert.equal((await api.submit(link, body())).status, 201);
+  // The burst is spent by two saved submissions; the next waits.
+  const waits = await api.submit(link, body());
+  assert.equal(waits.status, 429);
+  assert.equal(waits.body.error, "form_busy");
+  assert.equal((await api.upload(link, randomUUID(), "one.pdf", PDF)).status, 201);
+  assert.equal((await api.upload(link, randomUUID(), "two.pdf", PDF)).status, 201);
+  assert.equal((await api.upload(link, randomUUID(), "three.pdf", PDF)).body.error, "form_busy");
+  assert.equal((await api.list("formsubmissions")).length, 2);
+
+  // Without a trusted client address the per-minute limits are kept per link, so a
+  // flood at one link (here, one that leads nowhere) never closes another form.
+  const other = await published(api, autoForm({ name: "Second form" }));
+  let refused = 0;
+  for (let count = 0; count < 24; count++)
+    if ((await api.submit("no-such-form-aaaaaaaaaa", body())).status === 429) refused++;
+  assert.ok(refused >= 3, "the flooded link is limited");
+  assert.equal((await api.submit(other.data.linkId, { ...body(), revision: other.revision })).status, 201);
+});
+
+test("a follow-up outlives the person it was given to", async (t) => {
+  const api = await harness(t);
+  let form = await published(api);
+  const link = form.data.linkId;
+  const send = async () =>
+    assert.equal((await api.submit(link, { id: randomUUID(), revision: form.revision, lines: [], answers: autoAnswers(), files: [], elapsedMs: 60_000 })).status, 201);
+  await send();
+  await send();
+  const [first, second] = await api.list("formsubmissions");
+  assert.ok((await api.list("tasks")).every((task) => task.data.ownerId === "user-member"));
+  // The form's owner leaves the agency.
+  api.state.members = api.state.members.map((member) => (member.id === "user-member" ? { ...member, active: false } : member));
+  const filed = await api.command("formsubmissions", "formSubmission.file", { account: { name: "Dana Fixture", type: "person" } }, first);
+  assert.equal(filed.status, 200, JSON.stringify(filed.body));
+  assert.equal(filed.body.records.find((record) => record.kind === "tasks").data.ownerId, "user-admin", "whoever files it takes it on");
+  const dismissed = await api.command("formsubmissions", "formSubmission.dismiss", {}, second, "admin", "Duplicate");
+  assert.equal(dismissed.status, 200, JSON.stringify(dismissed.body));
+  // New submissions go to nobody rather than failing, and the form can still be paused.
+  await send();
+  const newest = (await api.list("tasks")).find((task) => task.data.status === "open" && !task.data.accountId);
+  assert.equal(newest.data.ownerId, null);
+  form = (await api.command("forms", "form.pause", {}, form)).body.records[0];
+  assert.equal(form.data.ownerId, null);
 });
 
 test("a link belongs to one form for good", async () => {

@@ -44,6 +44,8 @@ const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 interface Draft {
   id: string;
+  /** The form revision these answers were given to. */
+  revision: number;
   openedAt: number;
   started: boolean;
   step: number;
@@ -53,6 +55,7 @@ interface Draft {
 }
 const newDraft = (form: AmsPublicForm): Draft => ({
   id: crypto.randomUUID(),
+  revision: form.revision,
   openedAt: Date.now(),
   started: false,
   step: 0,
@@ -64,12 +67,18 @@ function readDraft(form: AmsPublicForm, storageKey: string | null): Draft {
   if (storageKey)
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as Draft | null;
-      if (saved && typeof saved.id === "string" && saved.answers)
-        return {
+      if (saved && typeof saved.id === "string" && saved.answers) {
+        const restored = {
           ...newDraft(form),
           ...saved,
           uploads: (saved.uploads || []).filter((upload) => upload.status === "done"),
         };
+        // The agency changed the form since: keep the answers, but walk the client
+        // through the questions as they are now.
+        return saved.revision === form.revision
+          ? restored
+          : { ...restored, revision: form.revision, started: false, step: 0 };
+      }
     } catch {
       // A private window without storage: the form still works, it just can't resume.
     }
@@ -102,6 +111,8 @@ export function FormRunner({
   const [failure, setFailure] = useState("");
   const [serverIssues, setServerIssues] = useState<AmsFormIssue[]>([]);
   const [done, setDone] = useState(false);
+  /** The first send was saved; a later one with other answers was not. */
+  const [keptFirst, setKeptFirst] = useState(false);
   const [closed, setClosed] = useState(false);
   const [trap, setTrap] = useState("");
   const root = useRef<HTMLDivElement>(null);
@@ -234,15 +245,19 @@ export function FormRunner({
       };
     });
 
+  // Kept in step with the draft, and added to the moment a file is taken, so files
+  // picked on two questions at once still add up to the form's limit.
+  const taken = useRef<RunnerUpload[]>([]);
+  taken.current = draft.uploads.filter((upload) => upload.status !== "failed");
   async function attach(sectionId: string, index: number, fieldId: string, files: File[]) {
-    const mine = draft.uploads.filter(
-      (upload) => upload.section === sectionId && upload.item === index && upload.field === fieldId,
-    );
-    let room = Math.min(
-      AMS_FORM_UPLOADS_PER_FIELD - mine.length,
-      AMS_FORM_UPLOAD_MAX_FILES - draft.uploads.length,
-    );
     for (const file of files) {
+      const room = Math.min(
+        AMS_FORM_UPLOADS_PER_FIELD -
+          taken.current.filter(
+            (upload) => upload.section === sectionId && upload.item === index && upload.field === fieldId,
+          ).length,
+        AMS_FORM_UPLOAD_MAX_FILES - taken.current.length,
+      );
       const key = crypto.randomUUID();
       const base = { key, section: sectionId, item: index, field: fieldId, name: file.name, bytes: file.size, sha256: "" };
       const refuse = (error: string) =>
@@ -263,7 +278,7 @@ export function FormRunner({
         refuse(file.size ? "This file is larger than 10 MB." : "This file is empty.");
         continue;
       }
-      room -= 1;
+      taken.current = [...taken.current, { ...base, status: "uploading" }];
       setDraft((previous) => ({ ...previous, uploads: [...previous.uploads, { ...base, status: "uploading" }] }));
       const settle = (change: Partial<RunnerUpload>) =>
         setDraft((previous) => ({
@@ -292,11 +307,25 @@ export function FormRunner({
       }
     }
   }
-  const removeUpload = (key: string) =>
+  function removeUpload(key: string) {
+    const upload = draft.uploads.find((item) => item.key === key);
     setDraft((previous) => ({
       ...previous,
-      uploads: previous.uploads.filter((upload) => upload.key !== key),
+      uploads: previous.uploads.filter((item) => item.key !== key),
     }));
+    // A file the client takes back is deleted from where it was waiting, unless the
+    // same file is still attached to another question.
+    if (
+      preview ||
+      upload?.status !== "done" ||
+      draft.uploads.some((item) => item.key !== key && item.sha256 === upload.sha256)
+    )
+      return;
+    void fetch(
+      `/api/forms/${form.linkId}/files?submission=${draft.id}&sha256=${upload.sha256}`,
+      { method: "DELETE" },
+    ).catch(() => undefined);
+  }
 
   function focusFirstProblem() {
     window.requestAnimationFrame(() =>
@@ -357,12 +386,15 @@ export function FormRunner({
         }),
       });
       const body = await response.json().catch(() => ({}));
-      if (response.ok) {
+      // Thanked only on the server's word that the answers were saved. "Already
+      // received" means an earlier send was saved and this one, with changes, was not.
+      if ((response.ok && body.ok === true) || body.error === "already_received") {
         try {
           sessionStorage.removeItem(storageKey!);
         } catch {
           // Nothing to clear.
         }
+        setKeptFirst(body.error === "already_received");
         setDone(true);
         window.requestAnimationFrame(() => root.current?.scrollIntoView({ block: "start" }));
         return;
@@ -371,16 +403,20 @@ export function FormRunner({
         setClosed(true);
         return;
       }
-      if (body.error === "invalid_answers" && Array.isArray(body.issues)) {
+      if (
+        (body.error === "invalid_answers" || body.error === "form_updated") &&
+        Array.isArray(body.issues)
+      ) {
         const reported = body.issues as AmsFormIssue[];
         const current = (body.form as AmsPublicForm | undefined) ?? form;
-        if (body.form) setLiveForm(body.form);
+        if (body.form) setLiveForm(current);
         setServerIssues(reported);
-        const at = amsFormSections(current, draft.lines).findIndex(
-          (item) => item.id === reported[0]?.section,
-        );
-        move({ step: Math.max(0, at) });
-        setAttempted(true);
+        const shown = amsFormSections(current, draft.lines);
+        const at = shown.findIndex((item) => item.id === reported[0]?.section);
+        // With nothing to fix, the client looks over the answers under the current
+        // wording on the review step, and sends again.
+        move({ step: at === -1 ? shown.length : at, revision: current.revision });
+        setAttempted(reported.length > 0);
         setFailure(body.message || "Some answers need another look.");
         return;
       }
@@ -468,9 +504,13 @@ export function FormRunner({
           <Check size={30} strokeWidth={2.5} />
         </span>
         <h1 ref={heading} tabIndex={-1}>
-          {form.confirmation.title}
+          {keptFirst ? "We have your first answers" : form.confirmation.title}
         </h1>
-        <p>{form.confirmation.body}</p>
+        <p>
+          {keptFirst
+            ? `${branding.agencyName} received this form the first time you pressed Send. The changes you made after that were not saved, so tell the agency about them directly.`
+            : form.confirmation.body}
+        </p>
         {preview ? (
           <p className="hf-preview-note">This is the preview. Nothing was sent or saved.</p>
         ) : (
@@ -547,7 +587,8 @@ export function FormRunner({
           {!preview && (
             <li>
               <Check size={15} aria-hidden="true" />
-              Your answers are kept on this device until you send them
+              Your answers stay on this device until you send them
+              {documents.length > 0 ? "; files upload as you attach them" : ""}
             </li>
           )}
         </ul>

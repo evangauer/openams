@@ -18,7 +18,9 @@ import { clientAddressHeaders } from "./client-address";
 export const FORM_LINK = /^[a-z0-9](?:[a-z0-9-]{4,62})[a-z0-9]$/;
 export type PublicFormView =
   | { status: "open"; form: AmsPublicForm }
-  | { status: "closed"; title: string; branding: AmsForm["branding"] };
+  | { status: "closed"; title: string; branding: AmsForm["branding"] }
+  /** The link may be fine; the form couldn't be read just now. */
+  | { status: "unavailable" };
 
 /** The API address for public form requests, or null where this deployment can't serve them. */
 export async function publicFormsApi(request: Request): Promise<string | null> {
@@ -47,6 +49,8 @@ export const loadPublicForm = cache(async (link: string): Promise<PublicFormView
     redirect: "error",
     signal: AbortSignal.timeout(15_000),
   }).catch(() => null);
-  if (!response?.ok) return null;
+  // Only "no such link" is a missing form. Being busy or down is not the client's link.
+  if (response?.status === 404) return null;
+  if (!response?.ok) return { status: "unavailable" };
   return (await response.json()) as PublicFormView;
 });

@@ -37,9 +37,16 @@ export function formSubmissionId(formId: string, clientId: string): string {
     .digest("hex");
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
-/** Where a client's upload is kept until, and after, the submission is filed. */
+/** Where a submitted file is kept: with the agency's documents, before and after filing. */
 export const formUploadKey = (tenantId: string, submissionId: string, sha256: string) =>
   `ams-documents/${tenantId}/forms/${submissionId}/${sha256}`;
+/**
+ * Where a file waits between being attached and the client pressing Send. This prefix
+ * holds nothing else, so a deployment can expire whatever is left in it.
+ */
+export const FORM_PENDING_PREFIX = "form-uploads";
+export const formPendingKey = (tenantId: string, submissionId: string, sha256: string) =>
+  `${FORM_PENDING_PREFIX}/${tenantId}/${submissionId}/${sha256}`;
 
 export const linkTaken = () =>
   new AmsError(409, "link_taken", "That link is already in use. Try again.");

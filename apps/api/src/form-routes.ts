@@ -14,16 +14,20 @@ import {
   amsFormIssues,
   amsFormSections,
   amsFormSnapshot,
-  amsFormVisibleFields,
   amsPublicForm,
   type AmsActor,
   type AmsData,
   type AmsRecord,
 } from "@openams/contracts";
-import { AmsError } from "./repository.js";
-import { fileHash, verifiedFile } from "./files.js";
-import { requestLimitOptions, TokenBuckets } from "./firebase/rate-limit.js";
+import { AmsError, digest } from "./repository.js";
+import { fileHash, verifiedFile, type AmsFiles } from "./files.js";
 import {
+  admissionKey,
+  requestLimitOptions,
+  TokenBuckets,
+} from "./firebase/rate-limit.js";
+import {
+  formPendingKey,
   formSubmissionId,
   formUploadKey,
   newFormLinkId,
@@ -43,10 +47,23 @@ export interface AmsFormsDependency {
   /** Whether an agency's public forms may be open right now. Default: always. */
   accepting?: (tenantId: string) => Promise<boolean>;
   /**
+   * Where a file waits between being attached and the client pressing Send, under
+   * `form-uploads/<agency>/…`. It must support `remove`, and whatever is left there
+   * (a client who never sent the form) should expire on its own. Nothing in it counts
+   * toward an agency's storage; a file is copied to the agency's documents only when
+   * its submission is saved.
+   */
+  pending: AmsFiles;
+  /**
    * Bytes of client uploads one form may take per UTC day on this process (default
-   * 500 MB), so a public form can't be used to fill the agency's storage.
+   * 500 MB), which bounds what can pile up in `pending` before it expires.
    */
   uploadBytesPerDay?: number;
+  /**
+   * How many submissions and uploads one form may save in a burst on this process
+   * before the steady rate applies (defaults: 40 and 60).
+   */
+  burst?: { submissions?: number; uploads?: number };
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A per-form daily allowance of uploaded bytes, held in this process. */
@@ -95,6 +112,8 @@ const PUBLIC_ERRORS = new Set([
   "uploads_not_requested",
   "upload_missing",
   "answers_too_long",
+  "form_updated",
+  "already_received",
 ]);
 const notFound = () =>
   new AmsError(404, "form_not_found", "This form link isn't active.");
@@ -209,10 +228,26 @@ export function mountFormRoutes(
   /* ------------------------------------------------------------- the public */
 
   // No session and no agency in the request: the link decides everything. Limits are per
-  // client where the deployment says who the client is (see admissionKey), and per form
-  // in this process, so one busy or abused form cannot flood an agency's records.
-  const submissionsPerForm = new TokenBuckets({ capacity: 40, refillPerSecond: 1 / 120 });
-  const uploadsPerForm = new TokenBuckets({ capacity: 60, refillPerSecond: 1 / 60 });
+  // client where the deployment says who the client is. Where it doesn't, they are per
+  // link, so traffic to one form (or to links that lead nowhere) never closes another
+  // agency's forms. Per form, in this process, a limit on what is actually saved keeps a
+  // busy or abused form from flooding an agency's records.
+  const perClient = (limit: number) =>
+    rateLimit({
+      ...requestLimitOptions(limit),
+      keyGenerator: (request) => {
+        const key = admissionKey(request);
+        return key === "instance" ? `form:${String(request.params.link).slice(0, 80)}` : key;
+      },
+    });
+  const submissionsPerForm = new TokenBuckets({
+    capacity: forms.burst?.submissions ?? 40,
+    refillPerSecond: 1 / 120,
+  });
+  const uploadsPerForm = new TokenBuckets({
+    capacity: forms.burst?.uploads ?? 60,
+    refillPerSecond: 1 / 60,
+  });
   const uploadAllowance = new UploadAllowance(
     forms.uploadBytesPerDay ?? 500 * 1024 * 1024,
   );
@@ -270,11 +305,28 @@ export function mountFormRoutes(
     form.data.sections.some((section) =>
       section.fields.some((field) => field.type === "file"),
     );
+  /** A client upload's name and type, held to what a public form takes. */
+  function uploadMetadata(name: string, bytes: Buffer) {
+    const extension = name.split(".").at(-1)?.toLowerCase() ?? "";
+    if (!(AMS_FORM_UPLOAD_EXTENSIONS as readonly string[]).includes(extension))
+      throw new AmsError(
+        415,
+        "unsupported_file",
+        "Attach a PDF, a photo (JPG or PNG), a Word or Excel file, or a CSV.",
+      );
+    return verifiedFile(name, bytes);
+  }
+  const pageUpload = (request: Request) => {
+    const client = z.string().uuid().safeParse(request.query.submission);
+    if (!client.success)
+      throw new AmsError(400, "invalid_file", "This file couldn't be read. Try attaching it again.");
+    return client.data;
+  };
 
   router.get(
     "/public/forms/:link",
     open,
-    rateLimit(requestLimitOptions(300)),
+    perClient(300),
     publicHandle(async (request, response) => {
       const found = await linked(request.params.link);
       if (!found) throw notFound();
@@ -291,12 +343,12 @@ export function mountFormRoutes(
       );
     }),
   );
-  // The web app asks this before it reads an upload's bytes, so a refused upload costs
-  // nothing. It charges the upload's limits; the upload itself is not charged again.
+  // The web app asks this before it reads an upload's bytes, so an upload that would be
+  // refused costs nothing. It spends nothing itself: only a stored file counts.
   router.post(
     "/public/forms/:link/upload-check",
     open,
-    rateLimit(requestLimitOptions(40)),
+    perClient(40),
     publicHandle(async (request, response) => {
       const { form } = await openForm(request.params.link);
       if (!hasUploads(form))
@@ -305,18 +357,18 @@ export function mountFormRoutes(
           "uploads_not_requested",
           "This form doesn't take file uploads.",
         );
-      if (!uploadAllowance.has(form.id) || !uploadsPerForm.take(form.id)) throw busy();
+      if (!uploadAllowance.has(form.id)) throw busy();
       response.json({ ok: true });
     }),
   );
   router.post(
     "/public/forms/:link/files",
     open,
-    rateLimit(requestLimitOptions(80)),
+    perClient(80),
     express.raw({ type: "application/octet-stream", limit: AMS_FORM_UPLOAD_MAX_BYTES }),
     publicHandle(async (request, response) => {
-      const client = z.string().uuid().safeParse(request.query.submission);
-      if (!client.success || !Buffer.isBuffer(request.body))
+      const client = pageUpload(request);
+      if (!Buffer.isBuffer(request.body))
         throw new AmsError(400, "invalid_file", "This file couldn't be read. Try attaching it again.");
       const { tenantId, form } = await openForm(request.params.link);
       if (!hasUploads(form))
@@ -331,17 +383,15 @@ export function mountFormRoutes(
       } catch {
         throw new AmsError(400, "invalid_file_name", "This file's name couldn't be read. Rename it and try again.");
       }
-      const extension = filename.split(".").at(-1)?.toLowerCase() ?? "";
-      if (!(AMS_FORM_UPLOAD_EXTENSIONS as readonly string[]).includes(extension))
-        throw new AmsError(
-          415,
-          "unsupported_file",
-          "Attach a PDF, a photo (JPG or PNG), a Word or Excel file, or a CSV.",
-        );
-      const metadata = verifiedFile(filename, request.body);
-      if (!uploadAllowance.has(form.id, request.body.length)) throw busy();
-      await deps.files.put(
-        formUploadKey(tenantId, formSubmissionId(form.id, client.data), metadata.sha256),
+      const metadata = uploadMetadata(filename, request.body);
+      if (
+        !uploadAllowance.has(form.id, request.body.length) ||
+        !uploadsPerForm.take(form.id)
+      )
+        throw busy();
+      // Held apart from the agency's documents until the client sends the form.
+      await forms.pending.put(
+        formPendingKey(tenantId, formSubmissionId(form.id, client), metadata.sha256),
         request.body,
         metadata.mediaType,
       );
@@ -354,10 +404,31 @@ export function mountFormRoutes(
       });
     }),
   );
+  // "Remove" on the client's page: the file a client took back is deleted, not kept.
+  router.post(
+    "/public/forms/:link/files/remove",
+    open,
+    perClient(80),
+    publicHandle(async (request, response) => {
+      const client = pageUpload(request);
+      const sha256 = z
+        .object({ sha256: z.string().regex(/^[a-f0-9]{64}$/) })
+        .strict()
+        .safeParse(request.body);
+      if (!sha256.success)
+        throw new AmsError(400, "invalid_file", "This file couldn't be removed. Reload the page and try again.");
+      const found = await linked(request.params.link);
+      if (!found) throw notFound();
+      await forms.pending.remove?.(
+        formPendingKey(found.tenantId, formSubmissionId(found.form.id, client), sha256.data.sha256),
+      );
+      response.json({ ok: true });
+    }),
+  );
   router.post(
     "/public/forms/:link/submissions",
     open,
-    rateLimit(requestLimitOptions(20)),
+    perClient(20),
     publicHandle(async (request, response) => {
       const parsed = AmsFormSubmitSchema.safeParse(request.body);
       if (!parsed.success)
@@ -374,101 +445,123 @@ export function mountFormRoutes(
           "not_accepted",
           "This response couldn't be accepted. Reload the page and try again.",
         );
+      // What the client sent, whatever order it arrived in.
+      const sent = digest({
+        lines: [...input.lines].sort(),
+        answers: input.answers,
+        files: input.files
+          .map((file) => `${file.section}/${file.item}/${file.field}/${file.sha256}`)
+          .sort(),
+      });
       for (let attempt = 0; ; attempt++) {
-        const { tenantId, form } = await openForm(request.params.link);
+        const found = await linked(request.params.link);
+        if (!found) throw notFound();
+        const { tenantId, form } = found;
         const submissionId = formSubmissionId(form.id, input.id);
-        // One page load is one submission: a retry of a saved one is simply done.
-        if (await deps.repository().get(tenantId, "formsubmissions", submissionId)) {
-          response.json({ ok: true });
-          return;
+        // One page load is one submission. This comes before anything else, so a client
+        // whose first send was saved is told so even if the form has closed since.
+        const saved = await deps
+          .repository()
+          .get(tenantId, "formsubmissions", submissionId);
+        if (saved) {
+          if (saved.data.digest === sent) {
+            response.json({ ok: true });
+            return;
+          }
+          throw new AmsError(
+            409,
+            "already_received",
+            "We already have the answers from the first time you pressed Send. Changes made after that were not saved.",
+          );
         }
-        const issues = amsFormIssues(form.data, input);
-        const sections = amsFormSections(form.data, input.lines);
-        // Every file must sit on a file question the client was actually asked.
-        for (const file of input.files) {
-          const section = sections.find((item) => item.id === file.section);
-          const item = input.answers[file.section]?.[file.item] ?? {};
-          if (
-            !section ||
-            (file.item > 0 && !section.repeat) ||
-            !amsFormVisibleFields(section, item).some(
-              (field) => field.id === file.field && field.type === "file",
-            )
-          )
-            issues.push({
-              section: file.section,
-              item: file.item,
-              field: file.field,
-              message: "Remove this file and attach it again.",
-            });
-        }
-        if (issues.length)
+        if (!found.accepting) throw closed();
+        // A client answers the questions on their screen. If the agency has changed the
+        // form since, they see the current questions and send again; an answer is never
+        // filed under wording the client didn't read.
+        if (input.revision !== form.revision)
           throw Object.assign(
             new AmsError(
-              422,
-              "invalid_answers",
-              input.revision === form.revision
-                ? "Some answers need another look."
-                : "This form was updated while you were filling it in. Check the highlighted questions.",
+              409,
+              "form_updated",
+              "This form was updated while you were filling it in. Look over your answers and send again.",
             ),
             {
               extra: {
-                issues,
-                // The page redraws with the current questions and keeps the answers.
-                ...(input.revision === form.revision
-                  ? {}
-                  : { form: amsPublicForm(form.data, form.revision) }),
+                issues: amsFormIssues(form.data, input),
+                form: amsPublicForm(form.data, form.revision),
               },
             },
           );
-        if (!submissionsPerForm.take(form.id)) throw busy();
-        const files: AmsData<"formsubmissions">["files"] = [];
-        for (const upload of input.files) {
-          if (
-            files.some(
-              (file) =>
-                file.sha256 === upload.sha256 &&
-                file.section === upload.section &&
-                file.item === upload.item &&
-                file.field === upload.field,
-            )
-          )
-            continue;
-          const storageKey = formUploadKey(tenantId, submissionId, upload.sha256);
-          // Read back what was stored: the record never lists a file that isn't there.
-          const bytes = await deps.files.get(storageKey).catch(() => null);
+        const issues = amsFormIssues(form.data, input);
+        if (issues.length)
+          throw Object.assign(
+            new AmsError(422, "invalid_answers", "Some answers need another look."),
+            { extra: { issues } },
+          );
+        const sections = amsFormSections(form.data, input.lines);
+        const uploads = input.files.filter(
+          (upload, index, all) =>
+            all.findIndex(
+              (other) =>
+                other.sha256 === upload.sha256 &&
+                other.section === upload.section &&
+                other.item === upload.item &&
+                other.field === upload.field,
+            ) === index,
+        );
+        // Read back what was stored: the record never lists a file that isn't there.
+        const checked: { upload: (typeof uploads)[number]; bytes: Buffer; name: string; mediaType: string }[] = [];
+        for (const upload of uploads) {
+          const bytes = await forms.pending
+            .get(formPendingKey(tenantId, submissionId, upload.sha256))
+            .catch(() => null);
           if (!bytes || bytes.length !== upload.bytes || fileHash(bytes) !== upload.sha256)
             throw new AmsError(
               422,
               "upload_missing",
               `"${upload.name.slice(0, 80)}" didn't finish uploading. Remove it and attach it again.`,
             );
-          const metadata = verifiedFile(upload.name, bytes);
-          const field = sections
-            .find((section) => section.id === upload.section)!
-            .fields.find((item) => item.id === upload.field)!;
+          const metadata = uploadMetadata(upload.name, bytes);
+          checked.push({ upload, bytes, name: metadata.name, mediaType: metadata.mediaType });
+        }
+        // Only a submission that is about to be saved spends the form's allowance.
+        if (!submissionsPerForm.take(form.id)) throw busy();
+        const files: AmsData<"formsubmissions">["files"] = [];
+        for (const { upload, bytes, name, mediaType } of checked) {
+          const storageKey = formUploadKey(tenantId, submissionId, upload.sha256);
+          // Now it joins the agency's documents (and counts toward its storage).
+          await deps.files.put(storageKey, bytes, mediaType);
           files.push({
             id: `f${files.length + 1}`,
             section: upload.section,
             item: upload.item,
             field: upload.field,
-            label: field.label,
-            name: metadata.name,
-            mediaType: metadata.mediaType,
+            label: sections
+              .find((section) => section.id === upload.section)!
+              .fields.find((item) => item.id === upload.field)!.label,
+            name,
+            mediaType,
             bytes: bytes.length,
-            sha256: metadata.sha256,
+            sha256: upload.sha256,
             storageKey,
             documentId: null,
           });
         }
         try {
+          const snapshot = amsFormSnapshot(form.data, input);
           const result = await service().receiveFormSubmission(tenantId, form, {
             submissionId,
             lines: amsFormChosenLines(form.data, input.lines),
-            contact: amsFormContact(input.answers),
-            sections: amsFormSnapshot(form.data, input),
+            contact: amsFormContact(snapshot),
+            sections: snapshot,
             files,
+            digest: sent,
           });
+          // The waiting copies have done their job. One left behind expires on its own.
+          for (const { upload } of checked)
+            await forms.pending
+              .remove?.(formPendingKey(tenantId, submissionId, upload.sha256))
+              .catch(() => undefined);
           response.status(result.replayed ? 200 : 201).json({ ok: true });
           return;
         } catch (error) {

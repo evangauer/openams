@@ -15,6 +15,8 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const view = await loadPublicForm((await params).link);
   if (!view) return { title: "Form not found", robots: { index: false } };
+  if (view.status === "unavailable")
+    return { title: "Form temporarily unavailable", robots: { index: false } };
   const agency = view.status === "open" ? view.form.branding.agencyName : view.branding.agencyName;
   const title = view.status === "open" ? view.form.title : view.title;
   return {
@@ -32,6 +34,21 @@ export default async function HostedFormPage({ params, searchParams }: Props) {
   const embed = (await searchParams).embed === "1";
   // Inside an agency's own page the form sits on that page's background.
   const frameStyle = embed ? <style>{"html,body{background:transparent}"}</style> : null;
+  if (view.status === "unavailable")
+    return (
+      <div className="hf" data-embed={embed || undefined}>
+        {frameStyle}
+        <main className="hf-main" style={{ paddingTop: 72 }}>
+          <section className="hf-card hf-done">
+            <h1>This form can&apos;t be opened right now</h1>
+            <p>
+              Your link is fine. Give it a minute and reload the page, or reach the agency
+              directly.
+            </p>
+          </section>
+        </main>
+      </div>
+    );
   if (view.status === "open")
     return (
       <>

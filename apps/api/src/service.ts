@@ -65,6 +65,7 @@ const FormReceipt = AmsFormSubmissionSchema.pick({
   contact: true,
   sections: true,
   files: true,
+  digest: true,
 })
   .extend({ submissionId: z.string().uuid() })
   .strict();
@@ -3281,8 +3282,20 @@ export class AmsService {
         const task = submission.data.taskId
           ? await tx.get("tasks", submission.data.taskId)
           : null;
+        // A follow-up outlives the person it was given to: whoever files it takes it on.
         if (task && !task.archivedAt && !task.data.accountId)
-          await save("tasks", { ...task.data, accountId }, task);
+          await save(
+            "tasks",
+            {
+              ...task.data,
+              accountId,
+              ownerId:
+                task.data.ownerId && !memberIds.has(task.data.ownerId)
+                  ? actor.userId
+                  : task.data.ownerId,
+            },
+            task,
+          );
         await save(
           "formsubmissions",
           {
@@ -3334,6 +3347,10 @@ export class AmsService {
             "tasks",
             {
               ...task.data,
+              ownerId:
+                task.data.ownerId && !memberIds.has(task.data.ownerId)
+                  ? actor.userId
+                  : task.data.ownerId,
               status: "done",
               completedAt: now,
               completedBy: actor.userId,

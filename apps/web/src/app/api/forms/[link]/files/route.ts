@@ -79,3 +79,45 @@ export async function POST(
     );
   }
 }
+
+/** "Remove" on the client's page: the waiting copy of a file is deleted. */
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ link: string }> },
+) {
+  const { link } = await context.params;
+  const query = new URL(request.url).searchParams;
+  const submission = query.get("submission") || "";
+  const sha256 = query.get("sha256") || "";
+  if (
+    !FORM_LINK.test(link) ||
+    !/^[0-9a-f-]{36}$/i.test(submission) ||
+    !/^[a-f0-9]{64}$/.test(sha256)
+  )
+    return refuse(404, "This form link isn't active.");
+  if (!mutationOriginAllowed(request))
+    return refuse(403, "Open the form from its link and try again.");
+  const api = await publicFormsApi(request);
+  if (!api) return refuse(404, "This form link isn't active.");
+  try {
+    const upstream = await fetch(
+      `${api}/public/forms/${link}/files/remove?submission=${encodeURIComponent(submission)}`,
+      {
+        method: "POST",
+        headers: { ...publicFormHeaders(request), "Content-Type": "application/json" },
+        body: JSON.stringify({ sha256 }),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    const output = new Headers(noStore);
+    output.set("Content-Type", "application/json");
+    return new Response(upstream.body, { status: upstream.status, headers: output });
+  } catch {
+    return NextResponse.json(
+      { error: "form_unavailable", message: "This file couldn't be removed just now." },
+      { status: 503, headers: noStore },
+    );
+  }
+}

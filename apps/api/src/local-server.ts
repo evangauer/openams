@@ -23,7 +23,7 @@ import { directConversation, SqliteAmsChat } from "./chat.js";
 import { DemoSandboxes } from "./demo-sandboxes.js";
 import { SqliteMailboxStore } from "./mailbox-store.js";
 import { mailboxRuntime } from "./mailbox-oauth.js";
-import { SqliteFormLinks } from "./form-links.js";
+import { FORM_PENDING_PREFIX, SqliteFormLinks } from "./form-links.js";
 
 // Evaluation entrypoint: local development, the IAP-protected hosted preview, or the
 // public demo (scripts/preview.mjs). Always loopback; only the web app reaches it.
@@ -129,6 +129,7 @@ const sandboxes = publicDemo
       remove: async (tenantId) => {
         await repository.deleteTenant(tenantId);
         await files.removeAll(`ams-documents/${tenantId}`);
+        await files.removeAll(`${FORM_PENDING_PREFIX}/${tenantId}`);
       },
       ttlMs: setting("AMS_DEMO_HOURS", 24) * 60 * 60 * 1000,
       max: setting("AMS_DEMO_MAX_SANDBOXES", 200),
@@ -229,7 +230,8 @@ app.use(
     members: async (tenantId) =>
       tenantId === "local_agency" ? members : demoMembers,
     chat,
-    forms: { links: formLinks, publishing: !publicDemo },
+    // Files a client attaches wait beside the documents folder until the form is sent.
+    forms: { links: formLinks, pending: files, publishing: !publicDemo },
     // The public demo connects to no mailbox.
     ...(sandboxes
       ? {}
@@ -297,6 +299,13 @@ const runReminders = () => {
 };
 const reminderTimer = setInterval(runReminders, 10_000);
 reminderTimer.unref();
+// Files attached to a form that was never sent are deleted after two days.
+const sweepUploads = () =>
+  files
+    .removeStale(FORM_PENDING_PREFIX, Date.now() - 48 * 60 * 60 * 1000)
+    .catch(() => console.error("Clearing unsent form uploads failed; it will be retried."));
+setInterval(sweepUploads, 60 * 60 * 1000).unref();
+void sweepUploads();
 // Expired sandboxes are deleted within a minute of their time.
 if (sandboxes)
   setInterval(() => {
