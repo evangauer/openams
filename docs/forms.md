@@ -31,8 +31,9 @@ other role can read them.
    on the commercial side. With two or more lines the client chooses which they want and
    answers the shared questions once.
 2. **Questions.** Reword, reorder, remove and add questions and sections. A question can
-   be a short answer, paragraph, email, phone, number, dollar amount, date, one choice,
-   several choices, yes or no, an address or a file upload, and can be asked only when an
+   be a short answer, paragraph, email, phone, number, dollar amount, percent, year, date,
+   ZIP code, address, VIN, federal tax ID, one choice, several choices, yes or no or a
+   file upload, and can be asked only when an
    earlier question in its section has a given answer. Sections such as drivers and
    vehicles repeat: the client adds one at a time.
 3. **Look.** The headline, welcome message, agency name, phone, email, color and logo the
@@ -57,6 +58,13 @@ for, moves through one section per step, attaches files where asked, reviews eve
 and sends it. Answers are kept in that browser tab's session storage, so a refresh does
 not lose them; they leave the device only when the client presses Send. Files upload as
 they are attached, and one the client removes is deleted.
+
+Answers are tidied as they are typed: a phone number becomes (518) 555-0142, a dollar
+amount 250,000, a date MM/DD/YYYY (slashes optional), and a ZIP code, VIN or federal tax
+ID takes its usual shape. Each is kept in one spelling however it was typed or pasted, so
+the agency reads every submission the same way. The rules are one set of functions in
+`packages/contracts/src/forms.ts` (`amsFormTyped`, `amsFormStored`, `amsFormValueText`)
+used by the page, the server and the workspace.
 
 Uploads: PDF, JPG, PNG, DOCX, XLSX or CSV, up to 10 MB each, five per question and ten per
 submission. Each file's type is checked against its contents.

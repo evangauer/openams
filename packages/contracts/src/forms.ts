@@ -23,11 +23,16 @@ export const AMS_FORM_FIELD_TYPES = [
   "phone",
   "number",
   "currency",
+  "percent",
+  "year",
   "date",
+  "zip",
+  "address",
+  "vin",
+  "ein",
   "select",
   "multiselect",
   "yesno",
-  "address",
   "file",
 ] as const;
 export type AmsFormFieldType = (typeof AMS_FORM_FIELD_TYPES)[number];
@@ -514,6 +519,146 @@ export function amsFormItemCount(section: AmsFormSection, answered: number): num
 
 const EMAIL = z.string().email().max(254);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/* --------------------------------------------------------------- formatting */
+
+const digitsOf = (value: string) => value.replace(/\D/g, "");
+const grouped = (digits: string) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const pad2 = (digits: string) => digits.padStart(2, "0");
+
+/**
+ * A phone number as it is typed. Ten digits become (518) 555-0142, with an optional
+ * extension after an x; a number that starts with + and another country's code is left
+ * as its digits. A leading 1 or +1 is dropped: no area code starts with 1.
+ */
+function phoneTyped(input: string): string {
+  const text = input.trimStart();
+  if (text.startsWith("+") && !/^\+\s*1/.test(text)) {
+    const rest = text
+      .slice(1)
+      .replace(/[^\d ]/g, "")
+      .replace(/ {2,}/g, " ")
+      .trimStart();
+    return `+${rest}`.slice(0, 20);
+  }
+  const mark = text.search(/x/i);
+  const digits = digitsOf(mark === -1 ? text : text.slice(0, mark))
+    .replace(/^1+/, "")
+    .slice(0, 10);
+  if (!digits) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  const number = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return mark === -1 || digits.length < 10
+    ? number
+    : `${number} x${digitsOf(text.slice(mark)).slice(0, 6)}`;
+}
+/**
+ * A number as it is typed: digits, one decimal point and, where allowed, a leading minus.
+ * Thousands are grouped from `groupFrom` whole digits up, so a dollar amount reads
+ * 1,200 while a plain number that may be a year stays 1998.
+ */
+function numberTyped(
+  input: string,
+  rules: { decimals: number; groupFrom: number; negative?: boolean },
+): string {
+  const text = input.replace(/[^\d.-]/g, "");
+  const sign = rules.negative && text.startsWith("-") ? "-" : "";
+  const [whole = "", ...rest] = text.replace(/-/g, "").split(".");
+  const digits = whole.replace(/^0+(?=\d)/, "").slice(0, 12);
+  const shown = digits.length >= rules.groupFrom ? grouped(digits) : digits;
+  if (!rest.length || !rules.decimals) return sign + shown;
+  return `${sign}${shown || "0"}.${rest.join("").slice(0, rules.decimals)}`;
+}
+/** A date as it is typed, toward MM/DD/YYYY. Slashes are optional: 3/14 and 0314 both work. */
+function dateTyped(input: string): string {
+  const text = input.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  if (iso) return `${pad2(iso[2])}/${pad2(iso[3])}/${iso[1]}`;
+  const parts = text.split(/[^\d]+/);
+  if (parts.length > 1 && parts[0] && parts[0].length <= 2 && parts[1].length <= 2) {
+    const month = pad2(parts[0]);
+    if (parts.length === 2) return `${month}/${parts[1]}`;
+    const day = parts[1] ? pad2(parts[1]) : "";
+    return `${month}/${day}/${parts.slice(2).join("").slice(0, 4)}`;
+  }
+  // A run of digits. A first digit that can only be a whole month or day gets its zero.
+  let rest = digitsOf(text);
+  const take = (lone: RegExp) => {
+    const part = lone.test(rest) ? `0${rest[0]}` : rest.slice(0, 2);
+    rest = rest.slice(lone.test(rest) ? 1 : 2);
+    return part;
+  };
+  const month = take(/^[2-9]/);
+  if (!rest) return month;
+  const day = take(/^[4-9]/);
+  return rest ? `${month}/${day}/${rest.slice(0, 4)}` : `${month}/${day}`;
+}
+/**
+ * What an input shows while a client types: the same answer, tidied as it goes. Applying
+ * it to its own result changes nothing, so it is safe on every keystroke.
+ */
+export function amsFormTyped(type: AmsFormFieldType, input: string): string {
+  switch (type) {
+    case "phone":
+      return phoneTyped(input);
+    case "currency":
+      return numberTyped(input, { decimals: 2, groupFrom: 4 });
+    case "number":
+      return numberTyped(input, { decimals: 4, groupFrom: 5, negative: true });
+    case "percent":
+      return numberTyped(input, { decimals: 2, groupFrom: 99 }).slice(0, 6);
+    case "year":
+      return digitsOf(input).slice(0, 4);
+    case "zip": {
+      const digits = digitsOf(input).slice(0, 9);
+      return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    }
+    case "ein": {
+      const digits = digitsOf(input).slice(0, 9);
+      return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+    }
+    case "vin":
+      return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 17);
+    case "date":
+      return dateTyped(input);
+    case "email":
+      return input.replace(/\s/g, "");
+    default:
+      return input;
+  }
+}
+/**
+ * An answer as it is kept: one spelling for each value, however it was typed or pasted.
+ * Checked and saved answers go through this, so 5185550142 and (518) 555-0142 are the
+ * same phone number and 250,000 is the amount 250000.
+ */
+export function amsFormStored(type: AmsFormFieldType, input: string): string {
+  const text = input.trim();
+  switch (type) {
+    case "phone":
+      return phoneTyped(text).replace(/ x$/, "").trim();
+    case "currency":
+    case "number":
+    case "percent": {
+      const plain = text.replace(/[$,%\s]/g, "").replace(/\.$/, "");
+      return plain.startsWith(".") ? `0${plain}` : plain;
+    }
+    case "date": {
+      const typed = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateTyped(text));
+      return typed ? `${typed[3]}-${typed[1]}-${typed[2]}` : text;
+    }
+    case "year":
+      return text;
+    case "zip":
+    case "ein":
+    case "vin":
+    case "email":
+      return amsFormTyped(type, text);
+    default:
+      return text;
+  }
+}
 function validDate(value: string) {
   if (!DATE.test(value)) return false;
   const date = new Date(`${value}T12:00:00.000Z`);
@@ -560,7 +705,7 @@ export function amsFormFieldError(
   }
   if (amsFormValueEmpty(value)) return field.required ? "This is required." : null;
   if (typeof value !== "string") return "Enter a value.";
-  const text = value.trim();
+  const text = amsFormStored(field.type, value);
   switch (field.type) {
     case "text":
       return text.length > 200 ? "Keep this under 200 characters." : null;
@@ -569,19 +714,35 @@ export function amsFormFieldError(
         ? null
         : "Enter an email address like name@example.com.";
     case "phone": {
-      const digits = text.replace(/\D/g, "").length;
-      return digits >= 10 && digits <= 15 && text.length <= 40
+      const digits = digitsOf(text.split(" x")[0]).length;
+      return (text.startsWith("+") ? digits >= 8 && digits <= 15 : digits === 10)
         ? null
-        : "Enter a phone number with its area code.";
+        : "Enter a 10-digit phone number, area code first.";
     }
     case "number":
       return /^-?\d{1,12}(\.\d{1,4})?$/.test(text) ? null : "Enter a number.";
     case "currency":
       return /^\d{1,12}(\.\d{1,2})?$/.test(text)
         ? null
-        : "Enter a dollar amount, like 250000.";
+        : "Enter a dollar amount, like 250,000.";
+    case "percent":
+      return /^\d{1,3}(\.\d{1,2})?$/.test(text) && Number(text) <= 100
+        ? null
+        : "Enter a percent from 0 to 100.";
+    case "year":
+      return /^\d{4}$/.test(text) && Number(text) >= 1600 && Number(text) <= 2100
+        ? null
+        : "Enter a 4-digit year.";
+    case "zip":
+      return /^\d{5}(-\d{4})?$/.test(text) ? null : "Enter a 5-digit ZIP code.";
+    case "ein":
+      return /^\d{2}-\d{7}$/.test(text) ? null : "Enter the 9-digit tax ID.";
+    case "vin":
+      return /^[A-Z0-9]{5,17}$/.test(text)
+        ? null
+        : "Enter the VIN: up to 17 letters and numbers.";
     case "date":
-      return validDate(text) ? null : "Enter a valid date.";
+      return validDate(text) ? null : "Enter a date as MM/DD/YYYY.";
     case "select":
       // Exactly one of the choices: a padded "Yes " must not pass here and then miss the
       // condition of a question that depends on it.
@@ -668,7 +829,9 @@ export function amsFormIssues(form: FormShape, input: AmsFormInput): AmsFormIssu
 }
 
 function cleanValue(field: AmsFormField, value: AmsFormValue): AmsFormValue {
-  if (typeof value === "string") return value.trim();
+  // A choice is kept exactly as listed; everything else typed gets its one spelling.
+  if (typeof value === "string")
+    return field.type === "select" ? value : amsFormStored(field.type, value);
   if (field.type === "address") return AmsFormAddressValueSchema.parse(value);
   return value;
 }
@@ -758,6 +921,10 @@ export function amsFormValueText(value: AmsFormValue, type?: AmsFormFieldType): 
     ]
       .filter(Boolean)
       .join(", ");
+  if (type === "phone") return amsFormStored("phone", value) || value;
+  if (type === "number" && /^-?\d+(\.\d+)?$/.test(value))
+    return amsFormTyped("number", value);
+  if (type === "percent" && /^\d+(\.\d+)?$/.test(value)) return `${value}%`;
   if (type === "currency" && /^\d+(\.\d+)?$/.test(value))
     return new Intl.NumberFormat("en-US", {
       style: "currency",

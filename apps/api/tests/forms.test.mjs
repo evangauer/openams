@@ -13,6 +13,10 @@ import {
   amsFormIssues,
   amsFormRemoveLine,
   amsFormSections,
+  amsFormSnapshot,
+  amsFormStored,
+  amsFormTyped,
+  amsFormValueText,
 } from "@openams/contracts";
 import { createAmsRouter } from "../dist/routes.js";
 import { MemoryFormLinks, formPendingKey, formSubmissionId, formUploadKey, newFormLinkId } from "../dist/form-links.js";
@@ -213,6 +217,58 @@ test("answers are checked the same way for the page and the server", () => {
   const dangling = autoForm();
   dangling.sections[1].fields[0].showIf = { field: "incidents", equals: true };
   assert.equal(AmsFormSchema.safeParse(dangling).success, false, "a question can depend only on an earlier one");
+});
+
+test("typed answers are tidied as they are typed and kept in one spelling", () => {
+  const typed = (type, steps) => steps.map((step) => amsFormTyped(type, step));
+  // Each keystroke of a phone number, then the ways one arrives whole.
+  assert.deepEqual(typed("phone", ["5", "518", "5185", "5185550", "5185550142"]), [
+    "(5", "(518", "(518) 5", "(518) 555-0", "(518) 555-0142",
+  ]);
+  for (const whole of ["518.555.0142", "1 518 555 0142", "+15185550142", "(518) 555-0142"])
+    assert.equal(amsFormStored("phone", whole), "(518) 555-0142");
+  assert.equal(amsFormTyped("phone", "(518) 555-0142x12"), "(518) 555-0142 x12");
+  assert.equal(amsFormStored("phone", "(518) 555-0142 x"), "(518) 555-0142", "an x with no extension is dropped");
+  assert.equal(amsFormStored("phone", "+44  20 7946 0958"), "+44 20 7946 0958", "another country's number is left as its digits");
+  // Dates are typed, with or without slashes, and kept as YYYY-MM-DD.
+  assert.deepEqual(typed("date", ["3", "031", "0314", "03141986", "3/", "3/1/", "3/14/1986", "1986-03-14"]), [
+    "03", "03/1", "03/14", "03/14/1986", "03/", "03/01/", "03/14/1986", "03/14/1986",
+  ]);
+  assert.equal(amsFormStored("date", "3/4/1986"), "1986-03-04");
+  assert.equal(amsFormValueText("1986-03-04", "date"), "03/04/1986");
+  // Money always groups thousands; a plain number waits for five digits, so a year
+  // typed into one is not written 1,998.
+  assert.deepEqual(typed("currency", ["1200", "$250,000", "1200.505", ".5"]), ["1,200", "250,000", "1,200.50", "0.5"]);
+  assert.deepEqual(typed("number", ["1998", "12000", "0.95"]), ["1998", "12,000", "0.95"]);
+  assert.equal(amsFormStored("currency", "250,000"), "250000");
+  assert.equal(amsFormValueText("250000", "currency"), "$250,000");
+  assert.equal(amsFormValueText("12000", "number"), "12,000");
+  assert.equal(amsFormValueText("45", "percent"), "45%");
+  assert.deepEqual(
+    [amsFormTyped("zip", "123456789"), amsFormTyped("ein", "123456789"), amsFormTyped("year", "19985"), amsFormTyped("vin", "1hgcm82633a 004352")],
+    ["12345-6789", "12-3456789", "1998", "1HGCM82633A004352"],
+  );
+  // Tidying what is already tidy changes nothing, so it is safe on every keystroke.
+  for (const [type, value] of [["phone", "5185550142"], ["currency", "1234567.89"], ["number", "12000.5"], ["date", "03141986"], ["zip", "123456789"], ["ein", "123456789"]])
+    assert.equal(amsFormTyped(type, amsFormTyped(type, value)), amsFormTyped(type, value));
+  // The page and the server agree on what is acceptable, however it was typed.
+  const form = AmsFormSchema.parse(autoForm());
+  const loose = autoAnswers();
+  loose.contact[0].phone = "1-555-010-0199";
+  loose.auto_drivers[0].birth_date = "4/12/1988";
+  assert.deepEqual(amsFormIssues(form, { lines: [], answers: loose, files: [] }), []);
+  const kept = amsFormSnapshot(form, { lines: [], answers: loose, files: [] });
+  const answer = (section, id) => kept.find((item) => item.id === section).items[0].answers.find((item) => item.id === id).value;
+  assert.equal(answer("contact", "phone"), "(555) 010-0199");
+  assert.equal(answer("auto_drivers", "birth_date"), "1988-04-12");
+  const wrong = autoAnswers();
+  wrong.contact[0].phone = "555-0199";
+  wrong.auto_drivers[0].birth_date = "13/45/1988";
+  wrong.auto_vehicles[0].year = "98";
+  assert.deepEqual(
+    amsFormIssues(form, { lines: [], answers: wrong, files: [] }).map((issue) => issue.message),
+    ["Enter a 10-digit phone number, area code first.", "Enter a date as MM/DD/YYYY.", "Enter a 4-digit year."],
+  );
 });
 
 test("a published form takes a submission with files, and staff file it to a new account", async (t) => {

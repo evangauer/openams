@@ -545,19 +545,48 @@
   border-color: var(--hf-danger);
   background: #fffafa;
 }
-.hf-money {
+/* Typed answers: a box about as wide as what goes in it, with even digits. */
+.hf-typed,
+.hf-affix {
   position: relative;
+  font-variant-numeric: tabular-nums;
 }
-.hf-money span {
+.hf-typed[data-size="short"],
+.hf-affix[data-size="short"] {
+  max-width: 150px;
+}
+.hf-typed[data-size="medium"],
+.hf-affix[data-size="medium"] {
+  max-width: 290px;
+}
+/* On a phone a box that is only a little narrower than its neighbours looks like a slip. */
+@container hf (max-width: 520px) {
+  .hf-typed[data-size="medium"],
+  .hf-affix[data-size="medium"] {
+    max-width: none;
+  }
+}
+.hf-affix span {
   position: absolute;
-  left: 13px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--hf-subtle);
   pointer-events: none;
 }
-.hf-money input:not([type="file"]) {
+.hf-affix span:first-child {
+  left: 13px;
+}
+.hf-affix span:last-child {
+  right: 13px;
+}
+.hf-affix span:first-child + input:not([type="file"]) {
   padding-left: 27px;
+}
+.hf-affix input:not([type="file"]):not(:last-child) {
+  padding-right: 32px;
+}
+.hf-field input::placeholder {
+  color: #a3a094;
 }
 .hf-error {
   display: flex;

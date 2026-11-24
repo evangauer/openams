@@ -27,6 +27,7 @@ import {
   amsFormItemCount,
   amsFormSections,
   amsFormSnapshot,
+  amsFormStored,
   amsFormValueText,
   amsFormVisibleFields,
   type AmsFormAnswers,
@@ -454,7 +455,9 @@ export function FormRunner({
       {branding.phone && (
         <a href={`tel:${branding.phone.replace(/[^0-9+]/g, "")}`}>
           <Phone size={14} aria-hidden="true" />
-          {branding.phone}
+          {/^1?\d{10}$/.test(branding.phone.replace(/\D/g, ""))
+            ? amsFormStored("phone", branding.phone)
+            : branding.phone}
         </a>
       )}
       {branding.email && (

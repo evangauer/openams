@@ -33,6 +33,11 @@ export const formField = {
   phone: field("phone"),
   number: field("number"),
   money: field("currency"),
+  percent: field("percent"),
+  year: field("year"),
+  zip: field("zip"),
+  vin: field("vin"),
+  ein: field("ein"),
   date: field("date"),
   yes: field("yesno"),
   address: field("address"),
@@ -57,8 +62,25 @@ export const formField = {
     showIf: { field: id, equals },
   }),
 };
-const { text, long, phone, number, money, date, yes, address, file, pick, many, when } =
-  formField;
+const {
+  text,
+  long,
+  phone,
+  number,
+  money,
+  percent,
+  year,
+  zip,
+  vin,
+  ein,
+  date,
+  yes,
+  address,
+  file,
+  pick,
+  many,
+  when,
+} = formField;
 
 export interface AmsFormCatalogLine {
   id: string;
@@ -148,7 +170,7 @@ const PERSONAL_LIABILITY_LIMITS = ["$100,000", "$300,000", "$500,000", "$1,000,0
 
 /** How a house is built. Asked for the home and for each rental property. */
 const dwellingFields: FieldInput[] = [
-  number("year_built", "Year built", { required: true }),
+  year("year_built", "Year built", { required: true }),
   number("square_feet", "Living area in square feet", {
     help: "Finished, heated space. A close estimate is fine.",
   }),
@@ -164,7 +186,7 @@ const dwellingFields: FieldInput[] = [
     "Flat (rubber or tar)",
     "Other or not sure",
   ]),
-  number("roof_year", "Year the roof was last replaced"),
+  year("roof_year", "Year the roof was last replaced"),
   text("updates", "Years of any wiring, plumbing or heating updates", {
     help: "Carriers ask about these on older homes. Rough years are fine, like: wiring 2015, furnace 2020.",
   }),
@@ -236,7 +258,7 @@ const buildingFields: FieldInput[] = [
   number("square_feet", "Size in square feet", {
     help: "The space you occupy, or the whole building if you own it.",
   }),
-  number("year_built", "Year built", { required: true, help: "A close guess is fine." }),
+  year("year_built", "Year built", { required: true, help: "A close guess is fine." }),
   pick("construction", "What is the building made of?", [
     "Wood frame",
     "Brick or block walls with a wood roof",
@@ -317,10 +339,10 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
         repeat: { noun: "vehicle", min: 1, max: 8, title: ["year", "make", "model"] },
         exposure: "vehicle",
         fields: [
-          number("year", "Year", { required: true }),
+          year("year", "Year", { required: true }),
           text("make", "Make", { required: true }),
           text("model", "Model", { required: true }),
-          text("vin", "VIN", {
+          vin("vin", "VIN", {
             help: "17 characters, on your registration or the driver's door jamb.",
           }),
           pick("ownership", "Do you own, finance or lease it?", [
@@ -336,7 +358,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
             "Farm",
           ]),
           number("annual_miles", "About how many miles a year?"),
-          text("garaging_zip", "ZIP code where it is kept overnight"),
+          zip("garaging_zip", "ZIP code where it is kept overnight"),
           pick("coverage_wanted", "Coverage you want on this vehicle", [
             "Full coverage (liability, comprehensive and collision)",
             "Liability only",
@@ -497,7 +519,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
             help: "Include the unit number.",
           }),
           pick("use", "How do you use it?", HOME_USE),
-          number("year_built", "Year the building was built", { required: true }),
+          year("year_built", "Year the building was built", { required: true }),
           number("square_feet", "Size of your unit in square feet"),
           pick("building_type", "What kind of building is it?", [
             "Townhouse style",
@@ -725,7 +747,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
           yes("primary_home", "Is this your primary home?", {
             help: "Flood pricing is different for a home you live in most of the year.",
           }),
-          number("year_built", "Year built", { required: true }),
+          year("year_built", "Year built", { required: true }),
           number("square_feet", "Size in square feet"),
           pick("stories", "Number of floors", ["1", "2", "3 or more"]),
           pick("foundation", "Foundation", FOUNDATIONS),
@@ -800,7 +822,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
             ],
             { required: true },
           ),
-          number("year", "Year", { required: true }),
+          year("year", "Year", { required: true }),
           text("make", "Make", { required: true }),
           text("model", "Model", { required: true }),
           text("vin", "VIN, hull ID or serial number", {
@@ -814,7 +836,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
             help: "Include custom parts and permanently attached equipment.",
           }),
           pick("ownership", "Do you own, finance or lease it?", ["Own", "Finance", "Lease"]),
-          text("garaging_zip", "ZIP code where it is kept"),
+          zip("garaging_zip", "ZIP code where it is kept"),
           pick("coverage_wanted", "Coverage you want on it", [
             "Full coverage (liability plus damage and theft)",
             "Liability only",
@@ -1008,7 +1030,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
           when(
             "alcohol",
             true,
-            number("alcohol_percent", "About what percent of sales is alcohol?"),
+            percent("alcohol_percent", "About what percent of sales is alcohol?"),
           ),
           many("extras", "Other coverage you'd like us to look at", [
             "Equipment breakdown",
@@ -1068,7 +1090,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
           text("title", "Title or role", {
             help: "For example: owner, member, partner, president.",
           }),
-          number("ownership", "Percent of the business they own"),
+          percent("ownership", "Percent of the business they own"),
           text("duties", "What do they do day to day?"),
           pick(
             "coverage",
@@ -1125,10 +1147,10 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
         repeat: { noun: "vehicle", min: 1, max: 25, title: ["year", "make", "model"] },
         exposure: "vehicle",
         fields: [
-          number("year", "Year", { required: true }),
+          year("year", "Year", { required: true }),
           text("make", "Make", { required: true }),
           text("model", "Model", { required: true }),
-          text("vin", "VIN", {
+          vin("vin", "VIN", {
             help: "17 characters, on the registration or the driver's door jamb.",
           }),
           pick("body_type", "What kind of vehicle is it?", [
@@ -1162,7 +1184,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
             "50 to 200 miles",
             "Over 200 miles",
           ]),
-          text("garaging_zip", "ZIP code where it is parked overnight"),
+          zip("garaging_zip", "ZIP code where it is parked overnight"),
           pick("coverage_wanted", "Coverage you want on this vehicle", [
             "Full coverage (liability, comprehensive and collision)",
             "Liability only",
@@ -1435,7 +1457,7 @@ export const AMS_FORM_CATALOG: AmsFormCatalogLine[] = [
               "Not sure",
             ]),
           ),
-          number(
+          percent(
             "online_percent",
             "About what percent of revenue comes through your website or app?",
           ),
@@ -1557,7 +1579,7 @@ const businessSection: SectionInput = {
       "Nonprofit",
       "Other",
     ]),
-    number("year_started", "Year the business started"),
+    year("year_started", "Year the business started"),
     long("operations", "What does the business do?", {
       required: true,
       help: "A few sentences: your products or services, and who your customers are.",
@@ -1565,7 +1587,7 @@ const businessSection: SectionInput = {
     money("revenue", "Annual revenue, roughly"),
     number("employees", "Number of employees, including owners"),
     text("website", "Website"),
-    text("fein", "Federal tax ID (FEIN)", {
+    ein("fein", "Federal tax ID (FEIN)", {
       help: "Carriers ask for it on most commercial policies. You can leave it for later.",
     }),
   ],

@@ -1,13 +1,15 @@
 "use client";
 // The inputs of a hosted form, one per question type. They hold no state of their own:
 // the runner owns the answers and tells each input its value and its problem.
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, FileText, Loader2, Paperclip, TriangleAlert, X } from "lucide-react";
 import {
   AMS_FORM_UPLOADS_PER_FIELD,
   AMS_FORM_US_STATES,
+  amsFormTyped,
   type AmsFormAddressValue,
   type AmsFormField,
+  type AmsFormFieldType,
   type AmsFormValue,
 } from "@openams/contracts";
 
@@ -45,6 +47,79 @@ const asAddress = (value: AmsFormValue | undefined): AmsFormAddressValue =>
   value && typeof value === "object" && !Array.isArray(value)
     ? { ...EMPTY_ADDRESS, ...value }
     : EMPTY_ADDRESS;
+
+/** How each typed answer is asked for: the keyboard a phone shows, and what the box hints. */
+const TYPED: Partial<
+  Record<
+    AmsFormFieldType,
+    {
+      inputMode: "text" | "tel" | "numeric" | "decimal" | "email";
+      maxLength: number;
+      placeholder?: string;
+      capitalize?: "characters";
+      /** Shown inside the box, before or after what is typed. */
+      before?: string;
+      after?: string;
+      size?: "short" | "medium";
+    }
+  >
+> = {
+  phone: { inputMode: "tel", maxLength: 24, placeholder: "(555) 555-0123", size: "medium" },
+  number: { inputMode: "decimal", maxLength: 21, size: "medium" },
+  currency: { inputMode: "decimal", maxLength: 19, before: "$", size: "medium" },
+  percent: { inputMode: "decimal", maxLength: 6, after: "%", size: "short" },
+  year: { inputMode: "numeric", maxLength: 4, placeholder: "YYYY", size: "short" },
+  date: { inputMode: "numeric", maxLength: 10, placeholder: "MM/DD/YYYY", size: "medium" },
+  zip: { inputMode: "numeric", maxLength: 10, size: "short" },
+  ein: { inputMode: "numeric", maxLength: 10, placeholder: "12-3456789", size: "medium" },
+  vin: { inputMode: "text", maxLength: 17, capitalize: "characters" },
+};
+/** The characters of a typed answer that are the answer; the rest is punctuation we add. */
+const MEANT = /[0-9A-Za-z.+]/g;
+const meantBefore = (text: string, caret: number) => text.slice(0, caret).match(MEANT)?.length ?? 0;
+
+/**
+ * A text box that tidies what is typed (see amsFormTyped) and keeps the caret where the
+ * person was working, so fixing one digit in the middle doesn't send them to the end.
+ */
+function TypedInput({
+  type,
+  value,
+  onChange,
+  ...rest
+}: {
+  type: AmsFormFieldType;
+  value: string;
+  onChange: (value: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange">) {
+  const input = useRef<HTMLInputElement>(null);
+  const keep = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const element = input.current;
+    if (keep.current === null || !element) return;
+    let position = 0;
+    for (let seen = 0; position < element.value.length && seen < keep.current; position++)
+      if (element.value[position].match(MEANT)) seen++;
+    element.setSelectionRange(position, position);
+    keep.current = null;
+  });
+  // An answer kept from before dates were typed (YYYY-MM-DD) reads the way it is typed now.
+  const shown = type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? amsFormTyped(type, value) : value;
+  return (
+    <input
+      {...rest}
+      ref={input}
+      type={type === "phone" ? "tel" : "text"}
+      value={shown}
+      onChange={(event) => {
+        const typed = event.target.value;
+        const caret = event.target.selectionStart ?? typed.length;
+        keep.current = caret >= typed.length ? null : meantBefore(typed, caret);
+        onChange(amsFormTyped(type, typed));
+      }}
+    />
+  );
+}
 
 /** A choice question reads better as buttons when there are only a few short choices. */
 const asChips = (options: string[]) =>
@@ -97,8 +172,7 @@ export function FormQuestion({
         {field.label}
         {field.required && (
           <span className="hf-required" aria-hidden="true">
-            {" "}
-            *
+            {"\u00a0*"}
           </span>
         )}
       </span>
@@ -236,7 +310,7 @@ export function FormQuestion({
             maxLength={10}
             value={address.postalCode}
             aria-invalid={error ? true : undefined}
-            onChange={(event) => part("postalCode", event.target.value)}
+            onChange={(event) => part("postalCode", amsFormTyped("zip", event.target.value))}
           />
         </div>
       );
@@ -253,45 +327,65 @@ export function FormQuestion({
         />
       );
       break;
-    case "currency":
-      control = (
-        <div className="hf-money">
-          <span aria-hidden="true">$</span>
+    default: {
+      const typed = TYPED[field.type];
+      const contact = autofill ? AUTOFILL[field.id] : undefined;
+      if (!typed) {
+        // Short answers and email: nothing to tidy beyond stray spaces in an address.
+        const email = field.type === "email";
+        control = (
           <input
             {...common}
-            inputMode="decimal"
-            maxLength={16}
+            type={email ? "email" : "text"}
+            inputMode={email ? "email" : undefined}
+            autoComplete={contact || "off"}
+            autoCapitalize={email ? "none" : field.id === "name" ? "words" : undefined}
+            spellCheck={email || contact ? false : undefined}
+            maxLength={email ? 254 : 200}
             value={text}
-            onChange={(event) => onChange(event.target.value.replace(/[^0-9.]/g, ""))}
+            onChange={(event) =>
+              onChange(email ? amsFormTyped("email", event.target.value) : event.target.value)
+            }
           />
-        </div>
-      );
-      break;
-    default:
-      control = (
-        <input
+        );
+        break;
+      }
+      const box = (
+        <TypedInput
           {...common}
-          type={field.type === "date" ? "date" : field.type === "email" ? "email" : "text"}
-          inputMode={
-            field.type === "number" ? "decimal" : field.type === "phone" ? "tel" : undefined
-          }
-          autoComplete={(autofill && AUTOFILL[field.id]) || "off"}
-          maxLength={field.type === "text" ? 200 : 254}
-          min={field.type === "date" ? "1900-01-01" : undefined}
-          max={field.type === "date" ? "2100-12-31" : undefined}
+          type={field.type}
+          inputMode={typed.inputMode}
+          autoComplete={contact || "off"}
+          autoCapitalize={typed.capitalize ?? "none"}
+          autoCorrect="off"
+          spellCheck={false}
+          maxLength={typed.maxLength}
+          placeholder={typed.placeholder}
           value={text}
-          onChange={(event) =>
-            onChange(
-              field.type === "number"
-                ? event.target.value.replace(/[^0-9.-]/g, "")
-                : event.target.value,
-            )
-          }
+          onChange={onChange}
         />
       );
+      control =
+        typed.before || typed.after ? (
+          <div className="hf-affix" data-size={typed.size}>
+            {typed.before && <span aria-hidden="true">{typed.before}</span>}
+            {box}
+            {typed.after && <span aria-hidden="true">{typed.after}</span>}
+          </div>
+        ) : (
+          <div className="hf-typed" data-size={typed.size}>
+            {box}
+          </div>
+        );
+    }
   }
   return (
-    <div className="hf-field" data-wide={wide || undefined} data-invalid={error ? true : undefined}>
+    <div
+      className="hf-field"
+      data-type={field.type}
+      data-wide={wide || undefined}
+      data-invalid={error ? true : undefined}
+    >
       {grouped ? (
         <span className="hf-label" id={`${id}-label`}>
           {labelText}

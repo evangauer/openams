@@ -74,11 +74,16 @@ const TYPE_LABELS: Record<AmsFormFieldType, string> = {
   phone: "Phone",
   number: "Number",
   currency: "Dollar amount",
+  percent: "Percent",
+  year: "Year",
   date: "Date",
+  zip: "ZIP code",
+  address: "Address",
+  vin: "VIN",
+  ein: "Tax ID (EIN)",
   select: "Choose one",
   multiselect: "Choose any",
   yesno: "Yes or no",
-  address: "Address",
   file: "File upload",
 };
 const lockedField = (section: AmsFormSection, field: AmsFormField) =>
