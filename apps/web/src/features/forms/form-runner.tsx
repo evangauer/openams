@@ -440,7 +440,10 @@ export function FormRunner({
           <Lock size={12} aria-hidden="true" />
           Your answers go to {branding.agencyName}. Never enter passwords or card numbers here.
         </span>
-        <span>Powered by OpenAMS</span>
+        {/* No referrer: the form's own link stays with the client and the agency. */}
+        <a href="https://openams.com" target="_blank" rel="noreferrer">
+          Powered by OpenAMS
+        </a>
       </footer>
     </div>
   );

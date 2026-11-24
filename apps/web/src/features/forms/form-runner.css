@@ -168,6 +168,12 @@
   }
 }
 
+.hf-foot a:hover {
+  color: var(--hf-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---------------------------------------------------------------- welcome */
 .hf-eyebrow {
   margin-bottom: 12px;

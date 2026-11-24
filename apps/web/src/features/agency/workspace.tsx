@@ -2050,6 +2050,13 @@ function RecordDetail({
       value !== "" &&
       (!Array.isArray(value) || value.length),
   );
+  // A follow-up task leads back to the form submission that opened it.
+  const formSubmission =
+    record.kind === "tasks"
+      ? ((book.formsubmissions || []) as AmsRecord<"formsubmissions">[]).find(
+          (item) => item.data.taskId === record.id,
+        )
+      : undefined;
   return (
     <Dialog
       open
@@ -2079,6 +2086,14 @@ function RecordDetail({
           </p>
         )}
         <PortalRenewalStepper record={record} />
+        {formSubmission && (
+          <p className="agency-form-note">
+            A client sent this through the form “{formSubmission.data.formName}”.{" "}
+            <a href={`#forms/submissions/${formSubmission.id}`} onClick={close}>
+              Read the submission
+            </a>
+          </p>
+        )}
         {preparing && record.kind === "certificates" && (
           <CertificatePreparation
             timeZone={session.timeZone}

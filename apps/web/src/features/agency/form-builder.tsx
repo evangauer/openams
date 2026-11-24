@@ -391,7 +391,8 @@ export function FormBuilder({
               </button>
             ))}
           </nav>
-          <fieldset className="fb-pane" disabled={!canEdit} key={step}>
+          {/* Everyone may copy a live form's link; only the questions and look are locked. */}
+          <fieldset className="fb-pane" disabled={!canEdit && step !== "share"} key={step}>
             {step === "coverage" && (
               <>
                 <h2>What can clients ask you for?</h2>
@@ -971,7 +972,7 @@ function SectionEditor({
               <button type="button" aria-label="Move section down" disabled={!canMoveDown} onClick={() => move(1)}>
                 <ArrowDown size={14} />
               </button>
-              {remove && section.fields.length > 0 && (
+              {remove && (
                 <button type="button" className="fb-remove" onClick={remove}>
                   <Trash2 size={14} />
                   Remove section

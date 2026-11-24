@@ -1380,6 +1380,12 @@
   }
 }
 @media (max-width: 720px) {
+  .fb-steps em {
+    display: none;
+  }
+  .fb-steps span {
+    font-size: 13.5px;
+  }
   .fb-steps button {
     padding: 12px 10px;
     justify-content: center;
@@ -1422,4 +1428,12 @@
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* A follow-up task's way back to the submission that opened it (workspace.tsx). */
+.agency-form-note a[href^="#forms/"] {
+  color: var(--s-link, #2e5a88);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

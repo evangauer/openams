@@ -22,7 +22,9 @@ import {
 } from "../../dist/firebase/identity.js";
 import { createAccessApi, createAccessControl, externalAccessFromEnv } from "../../dist/firebase/external-access.js";
 import { createSchedulerAuthorization } from "../../dist/firebase/scheduler.js";
+import { amsFormFromCatalog } from "@openams/contracts";
 import { createAmsRouter } from "../../dist/routes.js";
+import { FirestoreFormLinks } from "../../dist/firebase/firestore-form-links.js";
 import { FirestoreMailboxStore } from "../../dist/mailbox-store.js";
 import { SqliteAmsRepository } from "../../dist/sqlite-repository.js";
 import { LocalAmsFiles } from "../../dist/files.js";
@@ -97,6 +99,11 @@ before(async () => {
       workspaceName: firestoreWorkspaceName(db),
       timeZone: firestoreTimeZone(db),
       mailboxes: { store: new FirestoreMailboxStore(db) },
+      // As the Firebase server composes it: only an active agency's forms stay open.
+      forms: {
+        links: new FirestoreFormLinks(db),
+        accepting: async (tenantId) => ((await control.access(tenantId))?.state ?? "active") === "active",
+      },
     }),
   );
   server = web.listen(0, "127.0.0.1");
@@ -299,6 +306,66 @@ test("administrators get a signed, short-lived link; others don't", async () => 
   const casey = await signIn("casey.member@harbor-test.example");
   await json(await call("/identity/invitations/accept", { cookie: casey.cookie, body: { invitationId: invitation.id } }), 200);
   assert.equal((await call("/identity/access-link", { cookie: casey.cookie, body: {} })).status, 403);
+});
+
+test("a hosted form takes submissions only while its agency is active", async () => {
+  const id = people.avery.tenantId;
+  const { cookie } = people.avery;
+  await json(await setAccess(id, { state: "active" }), 200);
+  const created = await json(
+    await call("/ams/commands", {
+      cookie,
+      body: {
+        id: randomUUID(),
+        kind: "forms",
+        action: "create",
+        reason: "",
+        data: { name: "Auto quote", title: "Auto quote", branding: { agencyName: "Harbor Test Agency" }, ...amsFormFromCatalog(["auto"]) },
+      },
+    }),
+    200,
+  );
+  const draft = created.records[0];
+  const published = await json(
+    await call(`/ams/forms/${draft.id}/publish`, { cookie, body: { commandId: randomUUID(), expectedVersion: draft.version } }),
+    200,
+  );
+  const form = published.records[0];
+  const link = form.data.linkId;
+  // The link index holds only where the link leads.
+  const stored = (await db().collection("form_links").doc(link).get()).data();
+  assert.deepEqual({ tenantId: stored.tenantId, formId: stored.formId }, { tenantId: id, formId: form.id });
+  const submit = () =>
+    call(`/public/forms/${link}/submissions`, {
+      body: {
+        id: randomUUID(),
+        revision: form.revision,
+        lines: [],
+        elapsedMs: 60_000,
+        files: [],
+        answers: {
+          contact: [{ name: "Dana Fixture", email: "dana@client.example.test", phone: "555-010-0199" }],
+          auto_drivers: [{ name: "Dana Fixture", birth_date: "1988-04-12", incidents: false }],
+          auto_vehicles: [{ year: "2021", make: "Example", model: "Sedan" }],
+          auto_current: [{ insured: false }],
+        },
+      },
+    });
+  assert.equal((await json(await call(`/public/forms/${link}`), 200)).status, "open");
+  assert.equal((await submit()).status, 201);
+  for (const state of ["read_only", "suspended", "pending"]) {
+    await json(await setAccess(id, { state }), 200);
+    const closed = await json(await call(`/public/forms/${link}`), 200);
+    assert.equal(closed.status, "closed", state);
+    assert.equal(closed.form, undefined);
+    assert.equal((await json(await submit(), 409)).error, "form_closed", state);
+    assert.equal((await call(`/public/forms/${link}/upload-check`, { body: {} })).status, 409, state);
+  }
+  await json(await setAccess(id, { state: "active" }), 200);
+  assert.equal((await json(await call(`/public/forms/${link}`), 200)).status, "open");
+  assert.equal((await submit()).status, 201);
+  const submissions = await json(await call("/ams/records/formsubmissions", { cookie }), 200);
+  assert.equal(submissions.items.length, 2, "nothing was saved while the agency was not active");
 });
 
 test("an incomplete configuration is refused at startup", () => {
