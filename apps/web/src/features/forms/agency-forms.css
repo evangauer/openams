@@ -1,0 +1,116 @@
+/* The agency's forms page (/f/<handle>). It sits in the hosted form's frame and card
+ * (form-runner.css) and uses its tokens; only the list of forms is styled here. */
+.af .hf-intro + .hf-reach {
+  justify-content: flex-start;
+  margin-top: 16px;
+}
+.af-forms {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.af-forms a {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 20px 64px 20px 22px;
+  border: 1.5px solid var(--hf-line-strong);
+  border-radius: 16px;
+  background: var(--hf-card);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 140ms,
+    background-color 140ms,
+    transform 140ms;
+}
+.af-forms a:hover {
+  border-color: var(--hf-accent);
+  background: var(--hf-soft);
+}
+.af-forms a:active {
+  transform: scale(0.995);
+}
+.hf .af-forms a:focus-visible {
+  border-color: var(--hf-accent);
+  border-radius: 16px;
+}
+.af-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.af-text strong {
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.af-intro {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 14.5px;
+  color: var(--hf-muted);
+}
+.af-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.af-lines > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 999px;
+  background: var(--hf-soft);
+  color: var(--hf-accent-ink);
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.af-forms a:hover .af-lines > span {
+  background: var(--hf-soft-strong);
+}
+.af-go {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 50%;
+  background: var(--hf-accent);
+  color: var(--hf-on-accent);
+  transition: transform 160ms;
+}
+.af-forms a:hover .af-go {
+  transform: translateX(3px);
+}
+@container hf (max-width: 520px) {
+  .af-forms a {
+    padding: 18px 56px 18px 18px;
+  }
+  .af-text strong {
+    font-size: 17.5px;
+  }
+  .af-go {
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    margin-top: -16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-forms a,
+  .af-go {
+    transition: none;
+  }
+}

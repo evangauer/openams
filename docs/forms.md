@@ -79,6 +79,40 @@ Two things the page is careful about:
   simply confirmed. If a first send was saved and the client then changes something and
   sends again, they are told the first answers were kept and the changes were not.
 
+## Addresses
+
+A form can be reached three ways:
+
+| Address | Opens |
+| --- | --- |
+| `/f/<link>` | One form, by the link it was given when it was first published. |
+| `/f/<handle>` | The agency's forms page: its name, how to reach it and every form that is live, newest first. |
+| `/f/<handle>/<form>` | One form, by its readable name: its link without the random ending (`auto-quote` for `auto-quote-k3m9p2x7qa`). |
+
+The handle is the agency's forms address, for example `harbor-agency`. An administrator
+or manager chooses it under **Tools → Forms**; everyone on the team can see it.
+
+- **Set once.** An agency has one address and it does not change afterwards, so a link
+  printed on a card or placed on a website keeps working. Choose it with the same care
+  as a form's name.
+- **The rules.** 3 to 40 lowercase letters, numbers and dashes, starting and ending with
+  a letter or number, with no two dashes in a row. An address another agency already has
+  is refused.
+- **Reserved names.** Names that would read as part of the product are refused: `forms`,
+  `form`, `f`, `api`, `app`, `admin`, `www`, `openams`, `support`, `help`, `billing`,
+  `login`, `signin`, `sign-in`, `signup`, `sign-up`, `security`, `status`, `demo`,
+  `test`, `new`, `about`, `pricing`, `terms`, `privacy`, `agency`, `agencies`, `public`,
+  `embed` and `preview` (`AMS_FORM_RESERVED_HANDLES` in
+  `packages/contracts/src/forms.ts`).
+- **Old links keep working.** Choosing an address changes no form's own link. A form
+  opens at `/f/<link>` exactly as before, with or without an address.
+- **Only live forms.** The forms page lists published forms and nothing else. When every
+  form is paused, or the agency is not taking submissions, the address answers as if it
+  had never been chosen. The page takes its name, phone, email, color and logo from the
+  most recently published live form.
+- **Two forms with the same name** share a readable name. The forms page then links each
+  of them by its own `/f/<link>`.
+
 ## Submissions and filing
 
 Each submission opens a task for the form's owner (or the agency's default owner) and
@@ -116,7 +150,11 @@ cannot be created by hand.
   form: one SQLite table locally, one `form_links` collection in Firestore. It can be
   resolved one link at a time and cannot be listed. A link is `<form name>-<10 random
   characters>`, is assigned when a form is first published and never changes or moves.
-- **Routes** (`apps/api/src/form-routes.ts`). `POST /ams/forms/:id/publish` and
+  The same index holds each agency's forms address (`claimHandle`, `resolveHandle`,
+  `handleOf`): one address per agency, one agency per address, and never the same name
+  as a form link. An address resolves one at a time and cannot be listed either.
+- **Routes** (`apps/api/src/form-routes.ts`). `POST /ams/forms/:id/publish`,
+  `GET` and `POST /ams/forms/address` (read and choose the forms address) and
   `GET /ams/form-submissions/:id/files/:file` are for the signed-in agency. The public
   routes take no session and no agency identifier:
 
@@ -127,6 +165,7 @@ cannot be created by hand.
   | `POST /public/forms/:link/files` | One file, held for this submission only until it is sent. |
   | `POST /public/forms/:link/files/remove` | Deletes a file the client took back. |
   | `POST /public/forms/:link/submissions` | The answers. Checked against the current form, then saved with its follow-up task. |
+  | `GET /public/agencies/:handle` | The agency's name and contact details and its live forms (link, readable name, title, welcome message, lines). Not found when the address is unknown, nothing is live or the agency is not taking submissions. |
 
   The web app serves the page at `/f/<link>` and forwards the client's requests from
   `/api/forms/<link>/…`. It never reads or sends a session cookie on these routes.
@@ -138,7 +177,7 @@ cannot be created by hand.
 
 | | |
 | --- | --- |
-| Reading a form | 300 a minute per client |
+| Reading a form or an agency's forms page | 300 a minute per client |
 | Sending a submission | 20 a minute per client. Per form on each API process: 40 saved at once, then 1 every 2 minutes |
 | Uploading a file | 40 a minute per client. Per form on each API process: 60 stored at once, then 1 a minute, and 500 MB a day |
 | Size | 300 KB of answers; a submission record stays under the usual 128 KB |

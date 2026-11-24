@@ -950,3 +950,77 @@ export function amsFormSlug(name: string): string {
       .replace(/-+$/g, "") || "form"
   );
 }
+
+/* ------------------------------------------------------- the forms address */
+
+/**
+ * The short name an agency chooses for its forms: `/f/<handle>` lists its live forms and
+ * `/f/<handle>/<path>` opens one. An agency has one, chosen once.
+ */
+export const AmsFormHandle = z
+  .string()
+  .regex(/^[a-z0-9](?:[a-z0-9-]{1,38})[a-z0-9]$/)
+  .refine((handle) => !handle.includes("--"));
+/** Names that would read as part of the product, not as an agency. */
+export const AMS_FORM_RESERVED_HANDLES: readonly string[] = [
+  "forms",
+  "form",
+  "f",
+  "api",
+  "app",
+  "admin",
+  "www",
+  "openams",
+  "support",
+  "help",
+  "billing",
+  "login",
+  "signin",
+  "sign-in",
+  "signup",
+  "sign-up",
+  "security",
+  "status",
+  "demo",
+  "test",
+  "new",
+  "about",
+  "pricing",
+  "terms",
+  "privacy",
+  "agency",
+  "agencies",
+  "public",
+  "embed",
+  "preview",
+];
+/** Why a forms address can't be used, in words for the person typing it. Null: it can. */
+export function amsFormHandleError(handle: string): string | null {
+  if (!AmsFormHandle.safeParse(handle).success)
+    return "Use 3 to 40 lowercase letters, numbers and dashes.";
+  if (AMS_FORM_RESERVED_HANDLES.includes(handle)) return "That address is reserved.";
+  return null;
+}
+/** A form's readable name under its agency's address: its link without the random ending. */
+export function amsFormPath(linkId: string): string {
+  return linkId.replace(/-[a-z0-9]{10}$/, "");
+}
+/**
+ * What a visitor to an agency's forms address receives: how to reach the agency and its
+ * live forms, newest first. Two forms may share a `path`; link those by `linkId`.
+ */
+export interface AmsPublicAgencyForms {
+  handle: string;
+  name: string;
+  phone: string;
+  email: string;
+  accent: string;
+  logo: string;
+  forms: {
+    linkId: string;
+    path: string;
+    title: string;
+    intro: string;
+    lines: AmsFormLine[];
+  }[];
+}

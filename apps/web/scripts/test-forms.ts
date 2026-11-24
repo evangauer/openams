@@ -104,7 +104,9 @@ assert.ok(isLoopback("127.0.0.1") && isLoopback("localhost") && !isLoopback("ams
 
 // Only a hosted form page may be framed by another site; everything else still refuses.
 assert.ok(isHostedFormPath("/f/auto-quote-abcdefghjk"));
-for (const path of ["/", "/f", "/f/", "/f/a/b", "/forms", "/api/forms/auto-quote-abcdefghjk/submissions", "/sign-in/finish"])
+// The same form at its readable address under the agency's own.
+assert.ok(isHostedFormPath("/f/harbor-fixture/auto-quote"));
+for (const path of ["/", "/f", "/f/", "/f/a/b/c", "/f/a/b/", "/forms", "/api/forms/auto-quote-abcdefghjk/submissions", "/sign-in/finish"])
   assert.ok(!isHostedFormPath(path), path);
 assert.ok(contentSecurityPolicy("n", "production").includes("frame-ancestors 'none'"));
 assert.ok(contentSecurityPolicy("n", "production", true).includes("frame-ancestors *"));

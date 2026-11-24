@@ -16,6 +16,17 @@ export interface AmsFormLinks {
   /** Points a new link at a form. A link that already points there is left alone. */
   claim(linkId: string, target: AmsFormLinkTarget): Promise<void>;
   resolve(linkId: string): Promise<AmsFormLinkTarget | null>;
+  /**
+   * Gives an agency its forms address, in one step. An agency has at most one and it is
+   * set once: claiming the one it has changes nothing, claiming another is refused
+   * (`handle_set`). A handle another agency holds, or one spelled like an existing form
+   * link, is refused (`handle_taken`). Like links, handles cannot be listed.
+   */
+  claimHandle(handle: string, tenantId: string): Promise<void>;
+  /** The agency behind a forms address. */
+  resolveHandle(handle: string): Promise<string | null>;
+  /** An agency's own forms address. */
+  handleOf(tenantId: string): Promise<string | null>;
 }
 
 const LINK_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -50,6 +61,10 @@ export const formPendingKey = (tenantId: string, submissionId: string, sha256: s
 
 export const linkTaken = () =>
   new AmsError(409, "link_taken", "That link is already in use. Try again.");
+export const handleTaken = () =>
+  new AmsError(409, "handle_taken", "That address is already in use. Choose another.");
+export const handleSet = () =>
+  new AmsError(409, "handle_set", "Your agency already has a forms address.");
 
 /** Local adapter: one table in the agency database. */
 export class SqliteFormLinks implements AmsFormLinks {
@@ -59,6 +74,10 @@ export class SqliteFormLinks implements AmsFormLinks {
       // The `tenant` column lets a demo sandbox's links be deleted with the sandbox.
       db.exec(
         "CREATE TABLE IF NOT EXISTS ams_form_links(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,form_id TEXT NOT NULL,created_at TEXT NOT NULL)",
+      );
+      // One forms address per agency, and one agency per address.
+      db.exec(
+        "CREATE TABLE IF NOT EXISTS ams_form_handles(handle TEXT PRIMARY KEY,tenant TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL)",
       );
     });
   }
@@ -73,6 +92,9 @@ export class SqliteFormLinks implements AmsFormLinks {
           throw linkTaken();
         return;
       }
+      // A link and a forms address share /f/<name>, so neither may take the other's.
+      if (db.prepare("SELECT 1 FROM ams_form_handles WHERE handle=?").get(linkId))
+        throw linkTaken();
       db.prepare("INSERT INTO ams_form_links VALUES(?,?,?,?)").run(
         linkId,
         target.tenantId,
@@ -92,11 +114,54 @@ export class SqliteFormLinks implements AmsFormLinks {
         : null;
     });
   }
+  async claimHandle(handle: string, tenantId: string) {
+    await this.ready;
+    await this.database.exclusive((db) => {
+      const own = db
+        .prepare("SELECT handle FROM ams_form_handles WHERE tenant=?")
+        .get(tenantId);
+      if (own) {
+        if (own.handle !== handle) throw handleSet();
+        return;
+      }
+      if (
+        db.prepare("SELECT 1 FROM ams_form_handles WHERE handle=?").get(handle) ||
+        db.prepare("SELECT 1 FROM ams_form_links WHERE id=?").get(handle)
+      )
+        throw handleTaken();
+      db.prepare("INSERT INTO ams_form_handles VALUES(?,?,?)").run(
+        handle,
+        tenantId,
+        new Date().toISOString(),
+      );
+    });
+  }
+  async resolveHandle(handle: string) {
+    await this.ready;
+    return this.database.exclusive((db) => {
+      const row = db
+        .prepare("SELECT tenant FROM ams_form_handles WHERE handle=?")
+        .get(handle);
+      return row ? String(row.tenant) : null;
+    });
+  }
+  async handleOf(tenantId: string) {
+    await this.ready;
+    return this.database.exclusive((db) => {
+      const row = db
+        .prepare("SELECT handle FROM ams_form_handles WHERE tenant=?")
+        .get(tenantId);
+      return row ? String(row.handle) : null;
+    });
+  }
 }
 
 /** For tests and single-process tools. */
 export class MemoryFormLinks implements AmsFormLinks {
   private links = new Map<string, AmsFormLinkTarget>();
+  /** handle → agency, and agency → handle. */
+  private handles = new Map<string, string>();
+  private owners = new Map<string, string>();
   async claim(linkId: string, target: AmsFormLinkTarget) {
     const existing = this.links.get(linkId);
     if (
@@ -104,10 +169,27 @@ export class MemoryFormLinks implements AmsFormLinks {
       (existing.tenantId !== target.tenantId || existing.formId !== target.formId)
     )
       throw linkTaken();
+    if (this.handles.has(linkId)) throw linkTaken();
     this.links.set(linkId, { ...target });
   }
   async resolve(linkId: string) {
     const target = this.links.get(linkId);
     return target ? { ...target } : null;
+  }
+  async claimHandle(handle: string, tenantId: string) {
+    const own = this.owners.get(tenantId);
+    if (own !== undefined) {
+      if (own !== handle) throw handleSet();
+      return;
+    }
+    if (this.handles.has(handle) || this.links.has(handle)) throw handleTaken();
+    this.handles.set(handle, tenantId);
+    this.owners.set(tenantId, handle);
+  }
+  async resolveHandle(handle: string) {
+    return this.handles.get(handle) ?? null;
+  }
+  async handleOf(tenantId: string) {
+    return this.owners.get(tenantId) ?? null;
   }
 }

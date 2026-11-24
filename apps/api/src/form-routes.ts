@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   AMS_FORM_UPLOAD_EXTENSIONS,
   AMS_FORM_UPLOAD_MAX_BYTES,
+  AmsFormHandle,
   AmsFormLinkId,
   AmsFormSubmitSchema,
   AmsId,
@@ -11,12 +12,16 @@ import {
   amsCanWrite,
   amsFormChosenLines,
   amsFormContact,
+  amsFormHandleError,
   amsFormIssues,
+  amsFormPath,
   amsFormSections,
+  amsFormSlug,
   amsFormSnapshot,
   amsPublicForm,
   type AmsActor,
   type AmsData,
+  type AmsPublicAgencyForms,
   type AmsRecord,
 } from "@openams/contracts";
 import { AmsError, digest } from "./repository.js";
@@ -126,6 +131,23 @@ const busy = () =>
     "This form is getting a lot of responses. Wait a minute and try again.",
   );
 
+const publishingOff = () =>
+  new AmsError(
+    403,
+    "publishing_off",
+    "Public form links are turned off here. Build and preview the form, then publish it from your own agency.",
+  );
+/** A forms address to offer an agency, from its name. Always one it could be given. */
+function suggestedHandle(name: string) {
+  const slug = amsFormSlug(name);
+  const candidates = [
+    slug,
+    `${slug.slice(0, 33).replace(/-+$/, "")}-agency`,
+    "agency-forms",
+  ];
+  return candidates.find((candidate) => !amsFormHandleError(candidate))!;
+}
+
 export function mountFormRoutes(
   router: Router,
   deps: AmsRouterDependencies,
@@ -149,12 +171,7 @@ export function mountFormRoutes(
           "manager_required",
           "An agency administrator or manager publishes forms.",
         );
-      if (!publishing)
-        throw new AmsError(
-          403,
-          "publishing_off",
-          "Public form links are turned off here. Build and preview the form, then publish it from your own agency.",
-        );
+      if (!publishing) throw publishingOff();
       const id = parseAms(AmsId, request.params.id);
       const input = parseAms(
         z
@@ -182,6 +199,78 @@ export function mountFormRoutes(
           reason: "",
         }),
       );
+    }),
+  );
+  /** An agency's forms, up to a few hundred: more than an agency keeps. */
+  async function agencyForms(tenantId: string, status?: string) {
+    const found: AmsRecord<"forms">[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const result = await deps.repository().list(tenantId, "forms", {
+        limit: 100,
+        includeArchived: "false",
+        ...(status ? { status } : {}),
+        ...(cursor ? { cursor } : {}),
+      });
+      found.push(...result.items);
+      if (!result.nextCursor) break;
+      cursor = result.nextCursor;
+    }
+    return found;
+  }
+  // The agency's forms address: /f/<handle> lists its live forms. The agency chooses it
+  // itself, once; nobody else can read or set it.
+  router.get(
+    "/ams/forms/address",
+    handle(async (_request, response, actor) => {
+      const [current, setup, workspaceName] = await Promise.all([
+        forms.links.handleOf(actor.tenantId),
+        deps.repository().get(actor.tenantId, "workspace", "agency"),
+        deps.workspaceName(actor.tenantId).catch(() => ""),
+      ]);
+      let name = (setup?.data.name ?? workspaceName ?? "").trim();
+      if (!name) {
+        const latest = (await agencyForms(actor.tenantId)).sort((a, b) =>
+          b.updatedAt.localeCompare(a.updatedAt),
+        )[0];
+        name = latest?.data.branding.agencyName ?? "";
+      }
+      response.setHeader("Cache-Control", "no-store");
+      response.json({ handle: current, suggestion: suggestedHandle(name), publishing });
+    }),
+  );
+  router.post(
+    "/ams/forms/address",
+    handle(async (request, response, actor) => {
+      if (!amsCanWrite(actor.role, "forms"))
+        throw new AmsError(
+          403,
+          "manager_required",
+          "An agency administrator or manager sets the forms address.",
+        );
+      if (!publishing) throw publishingOff();
+      const input = z.object({ handle: z.string() }).strict().safeParse(request.body);
+      const invalid = input.success
+        ? amsFormHandleError(input.data.handle)
+        : "Use 3 to 40 lowercase letters, numbers and dashes.";
+      if (!input.success || invalid) {
+        response.status(422).json({ error: "handle_invalid", message: invalid });
+        return;
+      }
+      const wanted = input.data.handle;
+      try {
+        await forms.links.claimHandle(wanted, actor.tenantId);
+      } catch (error) {
+        if (!(error instanceof AmsError) || error.code !== "handle_set") throw error;
+        // Set once: say which address the agency has.
+        response.status(409).json({
+          error: error.code,
+          message: error.message,
+          handle: await forms.links.handleOf(actor.tenantId),
+        });
+        return;
+      }
+      response.json({ handle: wanted });
     }),
   );
   // A client's upload, before or after the submission is filed to an account.
@@ -237,7 +326,9 @@ export function mountFormRoutes(
       ...requestLimitOptions(limit),
       keyGenerator: (request) => {
         const key = admissionKey(request);
-        return key === "instance" ? `form:${String(request.params.link).slice(0, 80)}` : key;
+        return key === "instance"
+          ? `form:${String(request.params.link ?? request.params.handle).slice(0, 80)}`
+          : key;
       },
     });
   const submissionsPerForm = new TokenBuckets({
@@ -341,6 +432,56 @@ export function mountFormRoutes(
               branding: form.data.branding,
             },
       );
+    }),
+  );
+  // An agency's forms address: who the agency is and its live forms. An address that was
+  // never claimed, an agency that isn't taking submissions and an agency with nothing
+  // live all read the same, so the answer says nothing about who has an address.
+  router.get(
+    "/public/agencies/:handle",
+    open,
+    perClient(300),
+    publicHandle(async (request, response) => {
+      const missing = () => {
+        response.status(404).json({ error: "not_found" });
+      };
+      const address = AmsFormHandle.safeParse(request.params.handle);
+      if (!address.success || !publishing) return missing();
+      const tenantId = await forms.links.resolveHandle(address.data);
+      if (
+        !tenantId ||
+        !(await deps.enabled(tenantId)) ||
+        !((await forms.accepting?.(tenantId)) ?? true)
+      )
+        return missing();
+      const live = (await agencyForms(tenantId, "published"))
+        .filter(
+          (form) =>
+            !form.archivedAt && form.data.status === "published" && form.data.linkId,
+        )
+        .sort(
+          (a, b) =>
+            (b.data.publishedAt ?? "").localeCompare(a.data.publishedAt ?? "") ||
+            b.updatedAt.localeCompare(a.updatedAt),
+        );
+      if (!live.length) return missing();
+      const { branding } = live[0]!.data;
+      const body: AmsPublicAgencyForms = {
+        handle: address.data,
+        name: branding.agencyName,
+        phone: branding.phone,
+        email: branding.email,
+        accent: branding.accent,
+        logo: branding.logo,
+        forms: live.map((form) => ({
+          linkId: form.data.linkId!,
+          path: amsFormPath(form.data.linkId!),
+          title: form.data.title,
+          intro: form.data.intro,
+          lines: form.data.lines,
+        })),
+      };
+      response.json(body);
     }),
   );
   // The web app asks this before it reads an upload's bytes, so an upload that would be

@@ -1,0 +1,92 @@
+/* The forms address in the builder's Share step. Uses the builder's tokens (--f-*, set
+ * on .fm in forms.css) and sits under its link block (.fb-link). */
+.fa {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.fa-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--f-line-strong);
+  border-radius: 14px;
+  background: #fff;
+}
+.fa-label {
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--f-ink);
+}
+.fa-row code {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+  color: var(--f-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fa-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--f-line-strong);
+  border-radius: 9px;
+  background: var(--f-canvas);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+}
+.fa-field:focus-within {
+  border-color: var(--f-ink);
+  background: #fff;
+}
+.fa-field[data-invalid] {
+  border-color: var(--f-danger);
+}
+.fa-field > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--f-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fa-field input {
+  flex: 1 0 9ch;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--f-ink);
+}
+.fa-note {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  color: var(--f-subtle);
+}
+.fa-note[data-problem] {
+  color: var(--f-danger);
+}
+@media (max-width: 720px) {
+  .fa-row {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .fa-label,
+  .fa-row code,
+  .fa-field {
+    flex-basis: 100%;
+  }
+}

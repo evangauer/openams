@@ -7,10 +7,14 @@ import { tmpdir } from "node:os";
 import express from "express";
 import {
   AMS_FORM_CATALOG,
+  AMS_FORM_RESERVED_HANDLES,
+  AmsFormHandle,
   AmsFormSchema,
   amsFormAddLine,
   amsFormFromCatalog,
+  amsFormHandleError,
   amsFormIssues,
+  amsFormPath,
   amsFormRemoveLine,
   amsFormSections,
   amsFormSnapshot,
@@ -19,7 +23,8 @@ import {
   amsFormValueText,
 } from "@openams/contracts";
 import { createAmsRouter } from "../dist/routes.js";
-import { MemoryFormLinks, formPendingKey, formSubmissionId, formUploadKey, newFormLinkId } from "../dist/form-links.js";
+import { MemoryFormLinks, SqliteFormLinks, formPendingKey, formSubmissionId, formUploadKey, newFormLinkId } from "../dist/form-links.js";
+import { SqliteAmsRepository } from "../dist/sqlite-repository.js";
 import { openRepository, openFiles, openPendingFiles } from "./support/backend.mjs";
 
 const PDF = Buffer.from("%PDF-1.4\n% fixture declarations page\n");
@@ -651,4 +656,198 @@ test("the demo agency has a sample form with submissions waiting, and no open li
     const target = await links.resolve(forms[0].data.linkId);
     assert.deepEqual(target, publishing ? { tenantId: input.tenantId, formId: forms[0].id } : null);
   }
+});
+
+/* ------------------------------------------------------- the forms address */
+
+const INVALID_HANDLE = "Use 3 to 40 lowercase letters, numbers and dashes.";
+
+test("a forms address is short, lowercase and not a reserved name", () => {
+  for (const handle of ["harbor-agency", "abc", "a1b", "harbor2", "a".repeat(40)]) {
+    assert.equal(amsFormHandleError(handle), null, handle);
+    assert.equal(AmsFormHandle.safeParse(handle).success, true, handle);
+  }
+  for (const handle of ["", "ab", "Harbor", "harbor agency", "harbor_agency", "-harbor", "harbor-", "harbor--agency", "a".repeat(41), "harbor/agency", "../harbor"]) {
+    assert.equal(amsFormHandleError(handle), INVALID_HANDLE, handle);
+    assert.equal(AmsFormHandle.safeParse(handle).success, false, handle);
+  }
+  for (const handle of ["forms", "form", "f", "api", "app", "admin", "www", "openams", "support", "help", "billing", "login", "signin", "sign-in", "signup", "security", "status", "demo", "test", "new", "about", "pricing", "terms", "privacy"]) {
+    assert.ok(AMS_FORM_RESERVED_HANDLES.includes(handle), handle);
+    assert.ok(amsFormHandleError(handle), handle);
+  }
+  assert.equal(amsFormHandleError("forms"), "That address is reserved.");
+  // A form's readable name is its link without the random ending.
+  assert.equal(amsFormPath("auto-quote-abcdefghjk"), "auto-quote");
+  assert.equal(amsFormPath(newFormLinkId("Auto & Home — Quote!")), "auto-home-quote");
+  assert.equal(amsFormPath("auto-quote"), "auto-quote");
+});
+
+test("the link index gives an agency one address and keeps addresses and links apart", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "ams-form-handles-"));
+  const database = new SqliteAmsRepository(join(dir, "agency.sqlite"));
+  t.after(async () => {
+    database.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  for (const links of [new MemoryFormLinks(), new SqliteFormLinks(database)]) {
+    assert.equal(await links.resolveHandle("harbor-agency"), null);
+    assert.equal(await links.handleOf("agency-1"), null);
+    await links.claimHandle("harbor-agency", "agency-1");
+    // Asking again for the address it has changes nothing.
+    await links.claimHandle("harbor-agency", "agency-1");
+    assert.equal(await links.resolveHandle("harbor-agency"), "agency-1");
+    assert.equal(await links.handleOf("agency-1"), "harbor-agency");
+    await assert.rejects(links.claimHandle("harbor-agency", "agency-2"), { code: "handle_taken", status: 409 });
+    await assert.rejects(links.claimHandle("harbor-west", "agency-1"), { code: "handle_set", status: 409 });
+    assert.equal(await links.resolveHandle("harbor-west"), null, "a refused claim changes nothing");
+    assert.equal(await links.handleOf("agency-2"), null);
+    // An address and a link share /f/<name>: neither takes the other's.
+    const linkId = newFormLinkId("Auto quote");
+    await links.claim(linkId, { tenantId: "agency-1", formId: "form-1" });
+    await assert.rejects(links.claimHandle(linkId, "agency-2"), { code: "handle_taken" });
+    await assert.rejects(links.claim("harbor-agency", { tenantId: "agency-2", formId: "form-2" }), { code: "link_taken" });
+    assert.equal(await links.resolve("harbor-agency"), null);
+    assert.equal(await links.resolveHandle(linkId), null);
+    await links.claimHandle("second-agency", "agency-2");
+    assert.equal(await links.handleOf("agency-2"), "second-agency");
+  }
+});
+
+test("an agency claims its forms address once, and no other agency can take it", async (t) => {
+  const api = await harness(t);
+  const address = async (token) => (await api.get("/ams/forms/address", token)).json();
+  assert.equal((await api.get("/ams/forms/address", null)).status, 401);
+  // Anyone on the team can see it; the suggestion comes from the agency's name.
+  assert.deepEqual(await address("viewer"), { handle: null, suggestion: "fixture-agency", publishing: true });
+  const claim = (handle, token = "admin") => api.post("/ams/forms/address", { handle }, token);
+
+  // Only the roles that publish forms choose it.
+  for (const role of ["member", "accountant", "viewer"]) {
+    const refused = await claim("harbor-agency", role);
+    assert.equal(refused.status, 403, role);
+    assert.equal(refused.body.error, "manager_required");
+  }
+  for (const handle of ["ab", "Harbor-Agency", "harbor--agency", "-harbor", "harbor_agency", "a".repeat(41), "harbor agency"])
+    assert.deepEqual(await claim(handle), { status: 422, body: { error: "handle_invalid", message: INVALID_HANDLE } }, handle);
+  for (const handle of ["forms", "admin", "openams", "sign-in"])
+    assert.deepEqual(await claim(handle), { status: 422, body: { error: "handle_invalid", message: "That address is reserved." } }, handle);
+  for (const body of [{}, { handle: 7 }, { handle: "harbor-agency", tenantId: "agency-2" }])
+    assert.equal((await api.post("/ams/forms/address", body)).body.error, "handle_invalid", JSON.stringify(body));
+  assert.equal((await address("admin")).handle, null, "a refused address is not kept");
+
+  assert.deepEqual(await claim("harbor-agency", "manager"), { status: 200, body: { handle: "harbor-agency" } });
+  // Asking for the same address again is simply confirmed.
+  assert.deepEqual(await claim("harbor-agency"), { status: 200, body: { handle: "harbor-agency" } });
+  assert.equal((await address("member")).handle, "harbor-agency");
+  // Set once: a different address is refused, and the answer says which one it has.
+  const again = await claim("harbor-west");
+  assert.equal(again.status, 409);
+  assert.equal(again.body.error, "handle_set");
+  assert.equal(again.body.handle, "harbor-agency");
+  assert.equal(await api.links.resolveHandle("harbor-west"), null);
+
+  // Another agency cannot take it, and is told nothing about who has it.
+  const other = "admin@agency-2";
+  assert.equal((await address(other)).handle, null);
+  const taken = await claim("harbor-agency", other);
+  assert.equal(taken.status, 409);
+  assert.equal(taken.body.error, "handle_taken");
+  assert.deepEqual(Object.keys(taken.body).sort(), ["error", "message"]);
+  assert.equal((await address(other)).handle, null);
+  // Nor an address spelled like an existing form link.
+  const form = await published(api);
+  assert.equal((await claim(form.data.linkId, other)).body.error, "handle_taken");
+  assert.deepEqual(await claim("second-agency", other), { status: 200, body: { handle: "second-agency" } });
+  assert.equal((await address(other)).handle, "second-agency");
+  assert.equal((await address("admin")).handle, "harbor-agency");
+});
+
+test("a forms address lists only live forms, and nothing internal", async (t) => {
+  const api = await harness(t);
+  const agency = (handle = "harbor-agency") =>
+    api.get(`/public/agencies/${handle}`, null).then(async (response) => ({ status: response.status, body: await response.json() }));
+  const missing = { status: 404, body: { error: "not_found" } };
+  assert.deepEqual(await agency(), missing, "nobody has claimed it");
+  assert.deepEqual((await api.post("/ams/forms/address", { handle: "harbor-agency" })).body, { handle: "harbor-agency" });
+  assert.deepEqual(await agency(), missing, "no live form yet");
+  await api.command("forms", "create", autoForm({ name: "Internal draft" }));
+  assert.deepEqual(await agency(), missing, "a draft is not live");
+
+  let auto = await published(api);
+  const first = await agency();
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body, {
+    handle: "harbor-agency",
+    name: "Harbor Fixture Insurance",
+    phone: "555-0100",
+    email: "",
+    accent: "#1f6f5c",
+    logo: "",
+    forms: [
+      {
+        linkId: auto.data.linkId,
+        path: "auto-quote",
+        title: "Let's get your auto quote started",
+        intro: "A few questions about you, your drivers and your vehicles.",
+        lines: auto.data.lines,
+      },
+    ],
+  });
+  // The form opens at its own link exactly as before.
+  assert.equal((await api.publicGet(auto.data.linkId)).body.status, "open");
+
+  // A newer form comes first, and its look is the agency's.
+  let home = await published(
+    api,
+    autoForm({
+      name: "Auto quote",
+      title: "A second way in",
+      branding: { agencyName: "Harbor Fixture Insurance West", phone: "555-0111", email: "west@agency.example.test", accent: "#224466" },
+    }),
+  );
+  const both = await agency();
+  assert.deepEqual(both.body.forms.map((form) => form.linkId), [home.data.linkId, auto.data.linkId]);
+  // Two forms with the same name share a path; both are listed, each with its own link.
+  assert.deepEqual(both.body.forms.map((form) => form.path), ["auto-quote", "auto-quote"]);
+  assert.equal(both.body.name, "Harbor Fixture Insurance West");
+  assert.equal(both.body.email, "west@agency.example.test");
+  assert.equal(both.body.accent, "#224466");
+  // Nothing internal: no record ids, owner, follow-up settings, questions or agency id.
+  assert.deepEqual(Object.keys(both.body).sort(), ["accent", "email", "forms", "handle", "logo", "name", "phone"]);
+  for (const form of both.body.forms)
+    assert.deepEqual(Object.keys(form).sort(), ["intro", "lines", "linkId", "path", "title"]);
+  const text = JSON.stringify(both.body);
+  for (const internal of [auto.id, home.id, "user-member", "ownerId", "followUpDays", "agency-1", "sections", "Internal draft", "internal-draft", "publishedAt"])
+    assert.equal(text.includes(internal), false, internal);
+
+  // Paused: off the list. With nothing live, the address reads as if it were never claimed.
+  home = (await api.command("forms", "form.pause", {}, home)).body.records[0];
+  const one = await agency();
+  assert.deepEqual(one.body.forms.map((form) => form.linkId), [auto.data.linkId]);
+  assert.equal(one.body.name, "Harbor Fixture Insurance");
+  auto = (await api.command("forms", "form.pause", {}, auto)).body.records[0];
+  assert.deepEqual(await agency(), missing);
+  auto = (await api.post(`/ams/forms/${auto.id}/publish`, { commandId: randomUUID(), expectedVersion: auto.version })).body.records[0];
+  assert.equal((await agency()).status, 200);
+  // An agency that may not take submissions right now.
+  api.state.accepting = false;
+  assert.deepEqual(await agency(), missing);
+  api.state.accepting = true;
+  assert.equal((await agency()).status, 200);
+  assert.equal((await api.command("forms", "archive", {}, auto, "admin", "Retired")).status, 200);
+  assert.deepEqual(await agency(), missing);
+  // Unknown and malformed addresses read the same; a form link is not an address.
+  for (const handle of ["nobody-here", "Harbor-Agency", "ab", "harbor--agency", home.data.linkId])
+    assert.deepEqual(await agency(handle), missing, handle);
+});
+
+test("where publishing is off, no address is claimed or opened", async (t) => {
+  const api = await harness(t, { publishing: false });
+  assert.deepEqual(await (await api.get("/ams/forms/address")).json(), { handle: null, suggestion: "fixture-agency", publishing: false });
+  const refused = await api.post("/ams/forms/address", { handle: "harbor-agency" });
+  assert.equal(refused.status, 403);
+  assert.equal(refused.body.error, "publishing_off");
+  assert.equal(await api.links.resolveHandle("harbor-agency"), null);
+  await api.links.claimHandle("harbor-agency", "agency-1");
+  assert.equal((await api.get("/public/agencies/harbor-agency", null)).status, 404);
 });

@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 const id = "[A-Za-z0-9_-]{1,128}";
 const chatThread = `chat/(team|direct/${id})`;
 const readPath = new RegExp(
-  `^(certificate-templates/${id}/content|certificates/${id}/email-draft|session|audit|export|records/${id}(/${id}(/revisions/[1-9][0-9]*)?)?|documents/${id}/content|${chatThread}/messages|mailboxes|mailboxes/messages|mailboxes/messages/${id}(/original)?|mailboxes/${id}/events|form-submissions/${id}/files/[a-z][a-z0-9_]{0,39})$`,
+  `^(certificate-templates/${id}/content|certificates/${id}/email-draft|session|audit|export|records/${id}(/${id}(/revisions/[1-9][0-9]*)?)?|documents/${id}/content|${chatThread}/messages|mailboxes|mailboxes/messages|mailboxes/messages/${id}(/original)?|mailboxes/${id}/events|form-submissions/${id}/files/[a-z][a-z0-9_]{0,39}|forms/address)$`,
 );
 const writePath = new RegExp(
-  `^(certificate-templates|certificates/${id}/prepare|commands|import/(validate|apply)|accounts/${id}/(documents|emails)|correspondence/file|reminders/process|demo/start|chat/pulse|${chatThread}/(messages|read)|mailboxes/connect|mailboxes/authorize/(gmail|microsoft365)|mailboxes/${id}/(folders|select-folder|sync|disconnect|reset)|mailboxes/messages/${id}/(file|dismiss|retry)|forms/${id}/publish)$`,
+  `^(certificate-templates|certificates/${id}/prepare|commands|import/(validate|apply)|accounts/${id}/(documents|emails)|correspondence/file|reminders/process|demo/start|chat/pulse|${chatThread}/(messages|read)|mailboxes/connect|mailboxes/authorize/(gmail|microsoft365)|mailboxes/${id}/(folders|select-folder|sync|disconnect|reset)|mailboxes/messages/${id}/(file|dismiss|retry)|forms/${id}/publish|forms/address)$`,
 );
 async function proxy(
   request: Request,

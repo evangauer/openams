@@ -20,8 +20,12 @@ function authEmulatorOrigin(dev: boolean, host = process.env.NEXT_PUBLIC_FIREBAS
   return dev && host && /^(127\.0\.0\.1|localhost):\d{2,5}$/.test(host) ? [`http://${host}`] : [];
 }
 
-/** Hosted form pages (/f/…): the only pages another site may show in a frame. */
-export const isHostedFormPath = (pathname: string) => /^\/f\/[^/]+$/.test(pathname);
+/**
+ * Hosted form pages: the only pages another site may show in a frame. A form has two
+ * addresses, /f/<link> and the readable /f/<agency>/<form>. An agency's own page,
+ * /f/<agency>, has the same shape as a link, so it can't be told apart here.
+ */
+export const isHostedFormPath = (pathname: string) => /^\/f\/[^/]+(?:\/[^/]+)?$/.test(pathname);
 
 export function contentSecurityPolicy(
   nonce: string,

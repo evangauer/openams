@@ -9,6 +9,7 @@ import {
   localAmsRequestAllowed,
 } from "./ams-context";
 import { clientAddressHeaders } from "./client-address";
+import type { AmsPublicAgencyForms } from "@openams/contracts";
 
 /*
  * Public form pages and their two endpoints. They never read a session cookie: a visitor
@@ -53,4 +54,28 @@ export const loadPublicForm = cache(async (link: string): Promise<PublicFormView
   if (response?.status === 404) return null;
   if (!response?.ok) return { status: "unavailable" };
   return (await response.json()) as PublicFormView;
+});
+
+/** A forms address: what an agency chose for /f/<handle>. Looser than the API's own rule,
+ *  which decides; this only keeps odd input out of the request path. */
+const FORM_HANDLE = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
+
+/** An agency's live forms by its forms address, for /f/<handle>. Null: no such agency,
+ *  or it couldn't be read just now. */
+export const loadPublicAgency = cache(async (handle: string): Promise<AmsPublicAgencyForms | null> => {
+  if (!FORM_HANDLE.test(handle)) return null;
+  const incoming = await headers();
+  const host = incoming.get("host") || "localhost";
+  const request = new Request(`http://${host}/f/${handle}`, { headers: incoming });
+  const api = await publicFormsApi(request);
+  if (!api) return null;
+  const response = await fetch(`${api}/public/agencies/${handle}`, {
+    headers: publicFormHeaders(request),
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  if (!response?.ok) return null;
+  const agency = (await response.json().catch(() => null)) as AmsPublicAgencyForms | null;
+  return agency && typeof agency.handle === "string" && Array.isArray(agency.forms) ? agency : null;
 });

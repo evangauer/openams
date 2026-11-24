@@ -44,12 +44,13 @@ import { PageHeader } from "./page-header";
 import "./forms.css";
 
 const STARTERS = [
-  { label: "Personal lines quote", detail: "Auto, home, renters and umbrella in one form", lines: ["auto", "home", "renters", "umbrella"] },
-  { label: "Auto quote", detail: "Drivers, vehicles and current coverage", lines: ["auto"] },
-  { label: "Homeowners quote", detail: "The home, its features and coverage", lines: ["home"] },
-  { label: "Small business quote", detail: "General liability, BOP and workers' comp", lines: ["general_liability", "bop", "workers_comp"] },
-  { label: "Commercial auto quote", detail: "Vehicles, drivers and how they are used", lines: ["commercial_auto"] },
-  { label: "Start from a blank form", detail: "Contact details and your own questions", lines: [] },
+  { label: "Personal lines quote", detail: "Auto, home and renters in one form", lines: ["auto", "home", "renters"] },
+  {
+    label: "Business insurance quote",
+    detail: "General liability, BOP, workers' comp and commercial auto",
+    lines: ["general_liability", "bop", "workers_comp", "commercial_auto"],
+  },
+  { label: "Start from scratch", detail: "Contact details and your own questions", lines: [] },
 ];
 const FILTERS = {
   new: "New",
