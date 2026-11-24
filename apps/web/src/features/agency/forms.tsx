@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAccountCommand } from "./account-command";
 import { workspaceRecord } from "./agency-profile";
-import { FormBuilder } from "./form-builder";
+import { FormBuilder, type BuilderStep } from "./form-builder";
 import {
   exposureSummary,
   formUrl,
@@ -102,6 +102,7 @@ export function FormsView({
     [starter],
   );
   const newCount = submissions.filter((item) => item.data.status === "new").length;
+  const [builderStep, setBuilderStep] = useState<BuilderStep | null>(null);
 
   if (route[0] && route[0] !== "submissions") {
     const record = route[0] === "new" ? null : (forms.find((form) => form.id === route[0]) ?? null);
@@ -115,13 +116,20 @@ export function FormsView({
         </div>
       );
     return (
+      // One builder per form: moving between forms never carries one form's edits into
+      // another. The step is kept here so a new form's first save doesn't reset it.
       <FormBuilder
-        key="builder"
+        key={record?.id ?? "new"}
         record={record}
         initial={initial}
         session={session}
         saved={saved}
-        back={() => navigate("forms")}
+        step={builderStep}
+        setStep={setBuilderStep}
+        back={() => {
+          setBuilderStep(null);
+          navigate("forms");
+        }}
         opened={(id) => {
           // The address follows the new form without leaving the builder.
           window.history.replaceState(null, "", `#forms/${id}`);
@@ -133,6 +141,7 @@ export function FormsView({
   const showSubmissions = route[0] === "submissions";
   const start = (lines: string[], name = "") => {
     setStarter({ lines, name });
+    setBuilderStep(null);
     navigate("forms/new");
   };
   return (
@@ -177,7 +186,10 @@ export function FormsView({
               key={form.id}
               form={form}
               submissions={submissions.filter((item) => item.data.formId === form.id)}
-              open={() => navigate(`forms/${form.id}`)}
+              open={() => {
+                setBuilderStep(null);
+                navigate(`forms/${form.id}`);
+              }}
               openSubmissions={() => navigate("forms/submissions")}
             />
           ))}
@@ -313,11 +325,8 @@ function Submissions({
   useEffect(() => {
     if (!newLeft) setFilter((current) => (current === "new" ? "all" : current));
   }, [newLeft]);
-  // On a wide screen the first submission opens beside the list.
-  useEffect(() => {
-    if (!selectedId && selected && window.matchMedia("(min-width: 1100px)").matches)
-      window.history.replaceState(null, "", `#forms/submissions/${selected.id}`);
-  }, [selectedId, selected]);
+  // With nothing chosen, a wide screen shows the first submission beside the list (a
+  // narrow one shows the list alone). The address changes only when a person chooses.
   if (!submissions.length)
     return (
       <section className="fm-start">

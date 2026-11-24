@@ -2089,7 +2089,15 @@ function RecordDetail({
         {formSubmission && (
           <p className="agency-form-note">
             A client sent this through the form “{formSubmission.data.formName}”.{" "}
-            <a href={`#forms/submissions/${formSubmission.id}`} onClick={close}>
+            <a
+              href={`#forms/submissions/${formSubmission.id}`}
+              onClick={(event) => {
+                // Through the same history path as every other move in the workspace.
+                event.preventDefault();
+                close();
+                go(`forms/submissions/${formSubmission.id}`);
+              }}
+            >
               Read the submission
             </a>
           </p>

@@ -137,8 +137,8 @@ Other protections:
   'none'` and `X-Frame-Options: DENY`). The page holds no session, so a framing site gains
   nothing a visitor to the link doesn't have.
 - Form pages ask search engines not to index them.
-- Every page tells the client who receives the answers and not to enter passwords or card
-  numbers.
+- The form tells the client, on every step, who receives the answers and not to enter
+  passwords or card numbers.
 - With [external access control](external-access.md), only an active agency's forms take
   submissions; any other state shows the closed page.
 - In the [public demo](public-demo.md), forms can be built and previewed but not

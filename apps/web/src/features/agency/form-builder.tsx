@@ -63,7 +63,8 @@ const STEPS = [
   { id: "look", label: "Look" },
   { id: "share", label: "Share" },
 ] as const;
-type StepId = (typeof STEPS)[number]["id"];
+export type BuilderStep = (typeof STEPS)[number]["id"];
+type StepId = BuilderStep;
 const TYPE_LABELS: Record<AmsFormFieldType, string> = {
   text: "Short answer",
   longtext: "Paragraph",
@@ -126,7 +127,12 @@ export function FormBuilder({
   saved,
   back,
   opened,
+  step: chosenStep,
+  setStep,
 }: {
+  /** The builder step, kept by the parent so it survives a new form's first save. */
+  step: BuilderStep | null;
+  setStep: (step: BuilderStep) => void;
   /** The saved form, or null for one that hasn't been saved yet. */
   record: FormRecord | null;
   /** The starting draft for a new form. */
@@ -140,7 +146,7 @@ export function FormBuilder({
   const savedDraft = useMemo(() => (record ? draftOf(record) : initial), [record, initial]);
   const [draft, setDraft] = useState<FormDraft>(savedDraft);
   const [restored, setRestored] = useState(false);
-  const [step, setStep] = useState<StepId>(record ? "questions" : "coverage");
+  const step: StepId = chosenStep ?? (record ? "questions" : "coverage");
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [device, setDevice] = useState<"phone" | "desktop">("phone");
   const [publishing, setPublishing] = useState(false);
