@@ -881,7 +881,26 @@
   border-color: var(--f-ink);
   background: var(--f-ink);
 }
-.fb-lines span {
+.fb-line-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--f-soft);
+  color: var(--f-ink);
+  transition:
+    background 140ms,
+    color 140ms;
+}
+.fb-lines [aria-checked="true"] .fb-line-icon {
+  background: var(--f-ink);
+  color: #fff;
+}
+.fb-line-text {
+  flex: 1;
+  min-width: 0;
   font-size: 14.5px;
   font-weight: 650;
 }

@@ -16,6 +16,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { LineIcon } from "./line-icons";
 import {
   AMS_FORM_CONTACT_SECTION,
   AMS_FORM_UPLOAD_EXTENSIONS,
@@ -563,8 +564,11 @@ export function FormRunner({
                       }))
                     }
                   >
+                    <span className="hf-line-icon" aria-hidden="true">
+                      <LineIcon line={line.id} />
+                    </span>
+                    <span className="hf-line-label">{line.label}</span>
                     <i aria-hidden="true">{on && <Check size={13} strokeWidth={3} />}</i>
-                    {line.label}
                   </button>
                 );
               })}

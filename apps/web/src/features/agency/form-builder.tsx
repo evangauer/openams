@@ -33,6 +33,7 @@ import {
 } from "@openams/contracts";
 import { FormRunner } from "@/features/forms/form-runner";
 import { inkOn } from "@/features/forms/form-color";
+import { LineIcon } from "@/features/forms/line-icons";
 import { useAccountCommand } from "./account-command";
 import {
   AgencyRequestError,
@@ -433,11 +434,14 @@ export function FormBuilder({
                             aria-checked={on}
                             onClick={() => toggleLine(line.id)}
                           >
-                            <i aria-hidden="true">{on && <Check size={12} strokeWidth={3} />}</i>
-                            <span>
+                            <span className="fb-line-icon" aria-hidden="true">
+                              <LineIcon line={line.id} size={18} />
+                            </span>
+                            <span className="fb-line-text">
                               {line.label}
                               <small>{line.summary}</small>
                             </span>
+                            <i aria-hidden="true">{on && <Check size={12} strokeWidth={3} />}</i>
                           </button>
                         );
                       })}
