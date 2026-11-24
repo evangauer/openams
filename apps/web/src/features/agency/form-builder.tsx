@@ -34,6 +34,7 @@ import {
 import { FormRunner } from "@/features/forms/form-runner";
 import { inkOn } from "@/features/forms/form-color";
 import { LineIcon } from "@/features/forms/line-icons";
+import { FormAddress } from "./form-address";
 import { useAccountCommand } from "./account-command";
 import {
   AgencyRequestError,
@@ -90,6 +91,44 @@ const lockedField = (section: AmsFormSection, field: AmsFormField) =>
   section.id === AMS_FORM_CONTACT_SECTION &&
   (field.id === AMS_FORM_CONTACT_FIELDS.name || field.id === AMS_FORM_CONTACT_FIELDS.email);
 const draftKey = (id: string) => `openams.formdraft.${id}`;
+
+/** What stops a save, and where in the builder it can be fixed. */
+type Problem = {
+  message: string;
+  step?: StepId;
+  section?: string;
+  field?: string;
+  part?: "name" | "title" | "agencyName" | "sectionTitle" | "label" | "choices";
+};
+function firstProblem(draft: FormDraft, problems: string[]): Problem | null {
+  if (!problems.length) return null;
+  if (!draft.name.trim()) return { message: "Give the form a name.", part: "name" };
+  if (!draft.title.trim()) return { message: "Give the form a headline.", step: "look", part: "title" };
+  if (!draft.branding.agencyName.trim())
+    return { message: "Add your agency's name.", step: "look", part: "agencyName" };
+  if (!fitsOneForm(draft)) return { message: problems[0], step: "coverage" };
+  for (const [index, section] of draft.sections.entries()) {
+    const at = { step: "questions", section: section.id } as const;
+    if (!section.title.trim())
+      return { ...at, message: `Section ${index + 1} needs a title.`, part: "sectionTitle" };
+    for (const [number, field] of section.fields.entries()) {
+      if (!field.label.trim())
+        return {
+          ...at,
+          message: `Question ${number + 1} in "${section.title}" has no wording.`,
+          field: field.id,
+          part: "label",
+        };
+      if (
+        (field.type === "select" || field.type === "multiselect") &&
+        !field.options.some((option) => option.trim())
+      )
+        return { ...at, message: `"${field.label}" needs at least one choice.`, field: field.id, part: "choices" };
+    }
+    if (!section.fields.length) return { ...at, message: `"${section.title}" has no questions.` };
+  }
+  return { message: problems[0] };
+}
 
 /** A raster logo small enough to keep on the form record, made in the browser. */
 async function logoDataUrl(file: File): Promise<string> {
@@ -181,6 +220,45 @@ export function FormBuilder({
   const dirty = !sameDraft(draft, savedDraft);
   const problems = useMemo(() => draftProblems(draft), [draft]);
   const preview = useMemo(() => previewForm(draft), [draft]);
+  // A problem is named once someone tries to save or publish, not while they are still typing.
+  const [showProblems, setShowProblems] = useState(false);
+  const [jump, setJump] = useState<Problem | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const problem = useMemo(() => firstProblem(draft, problems), [draft, problems]);
+  const shownProblem = showProblems ? problem : null;
+  useEffect(() => {
+    if (!problems.length) setShowProblems(false);
+  }, [problems.length]);
+  // Takes the person to the thing that needs fixing, once its step and section are open.
+  useEffect(() => {
+    if (!jump) return;
+    const timer = window.setTimeout(() => {
+      const scope = jump.section
+        ? root.current?.querySelector(`[data-section="${CSS.escape(jump.section)}"]`)
+        : root.current;
+      const row = jump.field ? scope?.querySelector(`[data-field="${CSS.escape(jump.field)}"]`) : scope;
+      const selector =
+        jump.part === "name"
+          ? ".fb-title input"
+          : jump.part === "label"
+            ? ".fb-question > input"
+            : jump.part === "choices"
+              ? "textarea"
+              : jump.part
+                ? `[data-jump="${jump.part}"]`
+                : ".fb-section-head";
+      const target = (row?.querySelector<HTMLElement>(selector) ?? row) as HTMLElement | null | undefined;
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+      target?.focus({ preventScroll: true });
+      setJump(null);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [jump]);
+  function showProblem(found: Problem) {
+    if (found.step) setStep(found.step);
+    if (found.section) setOpenSection(found.section);
+    setJump({ ...found });
+  }
 
   // Unsaved edits survive leaving the builder: they are kept on this device until saved.
   useEffect(() => {
@@ -333,7 +411,7 @@ export function FormBuilder({
     step === "questions" ? (openSection ?? draft.sections[0]?.id ?? "@welcome") : "@welcome";
 
   return (
-    <div className="fb">
+    <div className="fb" ref={root}>
       <header className="fb-head">
         <button type="button" className="fb-back" onClick={back}>
           <ArrowLeft size={15} />
@@ -357,24 +435,24 @@ export function FormBuilder({
         </div>
         <div className="fb-head-actions">
           <span className="fb-saved" data-dirty={dirty || undefined}>
-            {dirty ? "Unsaved changes" : record ? "All changes saved" : ""}
+            {dirty ? "Unsaved changes" : record ? "Saved" : ""}
           </span>
           {canEdit && (
             <button
               type="button"
               className="agency-button"
-              disabled={busy || (!dirty && Boolean(record)) || problems.length > 0}
-              onClick={() => void save()}
+              disabled={busy || (!dirty && Boolean(record))}
+              onClick={() => (problems.length ? setShowProblems(true) : void save())}
             >
               {mutation.busy && !publishing ? <Loader2 size={15} className="fb-spin" /> : null}
-              {status === "published" ? "Save and update live form" : "Save draft"}
+              {status === "published" ? "Update live form" : "Save draft"}
             </button>
           )}
         </div>
       </header>
       {restored && (
         <p className="fb-banner">
-          Your unsaved changes from earlier are back.
+          <span>Your unsaved changes from earlier are back.</span>
           <button
             type="button"
             onClick={() => {
@@ -382,7 +460,7 @@ export function FormBuilder({
               setRestored(false);
             }}
           >
-            Discard them
+            Discard
           </button>
         </p>
       )}
@@ -391,15 +469,26 @@ export function FormBuilder({
           You can look through this form. An administrator or manager changes and publishes forms.
         </p>
       )}
-      {(mutation.error || (problems.length > 0 && dirty)) && (
+      {mutation.error ? (
         <p className="fb-banner" data-tone="problem" role="alert">
-          {mutation.error || problems[0]}
+          <span>{mutation.error}</span>
           {mutation.uncertain && (
             <button type="button" disabled={mutation.busy} onClick={() => void mutation.retry()}>
               Retry the same save
             </button>
           )}
         </p>
+      ) : (
+        shownProblem && (
+          <p className="fb-banner" data-tone="problem" role="alert">
+            <span>{shownProblem.message}</span>
+            {(shownProblem.step || shownProblem.part) && (
+              <button type="button" onClick={() => showProblem(shownProblem)}>
+                Show me
+              </button>
+            )}
+          </p>
+        )
       )}
       <div className="fb-body">
         <div className="fb-edit">
@@ -422,8 +511,7 @@ export function FormBuilder({
               <>
                 <h2>What can clients ask you for?</h2>
                 <p className="fb-lead">
-                  Pick the lines this form covers. Each one brings its own questions, and a client
-                  who chooses two answers the shared ones once.
+                  Pick the lines this form covers. Each one adds its own questions.
                 </p>
                 {(["personal", "commercial"] as const).map((family) => (
                   <section key={family} className="fb-lines">
@@ -444,9 +532,9 @@ export function FormBuilder({
                             </span>
                             <span className="fb-line-text">
                               {line.label}
-                              <small>{line.summary}</small>
                             </span>
                             <i aria-hidden="true">{on && <Check size={12} strokeWidth={3} />}</i>
+                            <small>{line.summary}</small>
                           </button>
                         );
                       })}
@@ -456,12 +544,11 @@ export function FormBuilder({
                 {lineLimit ? (
                   <p className="fb-note" role="status">
                     That line would take this form past what one form holds (40 sections,
-                    300 questions). Take another line off first, or build a second form:
-                    clients answer shorter forms more often anyway.
+                    300 questions). Take another line off first, or build a second form.
                   </p>
                 ) : (
                   <p className="fb-note">
-                    No line fits? Leave them all off and write your own questions in the next step.
+                    No line fits? Leave them off and write your own questions in step 2.
                   </p>
                 )}
               </>
@@ -470,8 +557,7 @@ export function FormBuilder({
               <>
                 <h2>What you ask</h2>
                 <p className="fb-lead">
-                  Open a section to reword, add or remove questions. The preview follows the
-                  section you have open.
+                  Open a section to edit its questions.
                 </p>
                 <div className="fb-sections">
                   {draft.sections.map((section, index) => (
@@ -482,6 +568,8 @@ export function FormBuilder({
                         (id) => draft.lines.find((line) => line.id === id)?.label ?? [],
                       )}
                       open={openSection === section.id}
+                      problemField={shownProblem?.section === section.id ? (shownProblem.field ?? "") : undefined}
+                      jump={jump?.section === section.id ? jump : null}
                       toggle={() => setOpenSection(openSection === section.id ? null : section.id)}
                       canMoveUp={index > 1}
                       canMoveDown={index > 0 && index < draft.sections.length - 1}
@@ -508,11 +596,11 @@ export function FormBuilder({
             {step === "look" && (
               <>
                 <h2>Make it yours</h2>
-                <p className="fb-lead">Clients see your name, your color and your words. Nothing says OpenAMS but the footer.</p>
+                <p className="fb-lead">Clients see your name, your color and your words.</p>
                 <div className="fb-grid">
                   <label className="agency-field fb-span">
                     <span>Headline</span>
-                    <input value={draft.title} maxLength={120} onChange={(event) => change({ title: event.target.value })} />
+                    <input data-jump="title" value={draft.title} maxLength={120} onChange={(event) => change({ title: event.target.value })} />
                   </label>
                   <label className="agency-field fb-span">
                     <span>Welcome message</span>
@@ -521,13 +609,14 @@ export function FormBuilder({
                   <label className="agency-field">
                     <span>Agency name</span>
                     <input
+                      data-jump="agencyName"
                       value={draft.branding.agencyName}
                       maxLength={120}
                       onChange={(event) => change({ branding: { ...draft.branding, agencyName: event.target.value } })}
                     />
                   </label>
                   <label className="agency-field">
-                    <span>Phone clients can call</span>
+                    <span>Phone</span>
                     <input
                       value={draft.branding.phone}
                       maxLength={40}
@@ -535,7 +624,7 @@ export function FormBuilder({
                     />
                   </label>
                   <label className="agency-field fb-span">
-                    <span>Email clients can write to</span>
+                    <span>Email</span>
                     <input
                       type="email"
                       value={draft.branding.email}
@@ -566,7 +655,7 @@ export function FormBuilder({
                           value={draft.branding.accent}
                           onChange={(event) => change({ branding: { ...draft.branding, accent: event.target.value } })}
                         />
-                        Your own
+                        Custom
                       </label>
                     </div>
                   </div>
@@ -607,7 +696,7 @@ export function FormBuilder({
                         </button>
                       )}
                     </div>
-                    <small>{logoError || "PNG, JPG or WebP. Without one, clients see your initial on your color."}</small>
+                    <small data-error={logoError ? true : undefined}>{logoError || "PNG, JPG or WebP."}</small>
                   </div>
                 </div>
                 <h3 className="fb-subhead">After they send it</h3>
@@ -630,12 +719,12 @@ export function FormBuilder({
                     />
                   </label>
                   <label className="agency-field fb-span">
-                    <span>Consent line above the Send button</span>
+                    <span>Consent line</span>
                     <textarea rows={2} value={draft.consent} maxLength={1000} onChange={(event) => change({ consent: event.target.value })} />
-                    <small>Leave it empty to show none. Ask your compliance contact what your state expects.</small>
+                    <small>Shown above the Send button. Leave empty for none.</small>
                   </label>
                   <label className="agency-field">
-                    <span>Who follows up</span>
+                    <span>Follow-up task goes to</span>
                     <select value={draft.ownerId ?? ""} onChange={(event) => change({ ownerId: event.target.value || null })}>
                       <option value="">The agency&apos;s default owner</option>
                       {session.members
@@ -646,10 +735,9 @@ export function FormBuilder({
                           </option>
                         ))}
                     </select>
-                    <small>Each submission opens a task for this person.</small>
                   </label>
                   <label className="agency-field">
-                    <span>Follow-up task is due</span>
+                    <span>Task is due</span>
                     <select value={draft.followUpDays} onChange={(event) => change({ followUpDays: Number(event.target.value) })}>
                       <option value={0}>The same day</option>
                       <option value={1}>The next day</option>
@@ -667,7 +755,7 @@ export function FormBuilder({
                 {status === "published" && link ? (
                   <>
                     <p className="fb-lead">
-                      Anyone with this link can fill in the form. Put it in your email signature, text it to a client, or add it to your website.
+                      Anyone with this link can fill in the form.
                     </p>
                     <div className="fb-link">
                       <code>{link}</code>
@@ -682,16 +770,17 @@ export function FormBuilder({
                         You are running OpenAMS on this computer, so this link opens here only. On your deployed OpenAMS the same button gives you a link clients can open.
                       </p>
                     )}
+                    <FormAddress origin={origin} linkId={record?.data.linkId ?? null} />
                     <div className="fb-share">
                       <section>
                         <h3>Scan to open</h3>
-                        <p>For a counter card, a flyer or the back of a business card.</p>
+                        <p>For a counter card or a flyer.</p>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="fb-qr" alt="QR code for the form link" src={qrFor(link)} />
                       </section>
                       <section>
                         <h3>Add it to your website</h3>
-                        <p>Paste this where the form should appear. It grows to fit as clients move through it.</p>
+                        <p>Paste this where the form should appear.</p>
                         <pre>{embedSnippet(origin, record!.data.linkId!, `${draft.branding.agencyName}: ${draft.title}`)}</pre>
                         <CopyButton
                           text={embedSnippet(origin, record!.data.linkId!, `${draft.branding.agencyName}: ${draft.title}`)}
@@ -738,8 +827,8 @@ export function FormBuilder({
                       <button
                         type="button"
                         className="agency-button primary fb-publish"
-                        disabled={busy || problems.length > 0}
-                        onClick={() => void publish()}
+                        disabled={busy}
+                        onClick={() => (problems.length ? setShowProblems(true) : void publish())}
                       >
                         {publishing ? <Loader2 size={16} className="fb-spin" /> : <Play size={16} />}
                         {status === "paused" ? "Reopen form" : dirty || !record ? "Save and publish" : "Publish form"}
@@ -758,7 +847,7 @@ export function FormBuilder({
         </div>
         <aside className="fb-preview" aria-label="Preview">
           <div className="fb-preview-bar">
-            <span>Preview · what a client sees</span>
+            <span>Preview</span>
             <div role="group" aria-label="Preview size">
               <button type="button" aria-pressed={device === "phone"} aria-label="Phone" onClick={() => setDevice("phone")}>
                 <Smartphone size={15} />
@@ -790,6 +879,8 @@ function SectionEditor({
   section,
   lineLabels,
   open,
+  problemField,
+  jump,
   toggle,
   canMoveUp,
   canMoveDown,
@@ -801,6 +892,10 @@ function SectionEditor({
   section: AmsFormSection;
   lineLabels: string[];
   open: boolean;
+  /** The question to mark as needing a fix ("" for the section itself), when there is one. */
+  problemField?: string;
+  /** Where the builder is taking the person, when it is inside this section. */
+  jump: Problem | null;
   toggle: () => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -810,6 +905,10 @@ function SectionEditor({
   changeField: (fieldId: string, patch: Partial<AmsFormField>) => void;
 }) {
   const [openField, setOpenField] = useState<string | null>(null);
+  // A question's choices live in its details, so those open before the builder points at them.
+  useEffect(() => {
+    if (jump?.part === "choices" && jump.field) setOpenField(jump.field);
+  }, [jump]);
   const moveField = (index: number, by: number) =>
     change((current) => {
       const fields = [...current.fields];
@@ -830,7 +929,12 @@ function SectionEditor({
     setOpenField(id);
   };
   return (
-    <article className="fb-section" data-open={open || undefined}>
+    <article
+      className="fb-section"
+      data-open={open || undefined}
+      data-section={section.id}
+      data-problem={problemField !== undefined || undefined}
+    >
       <button type="button" className="fb-section-head" aria-expanded={open} onClick={toggle}>
         <span>
           <strong>{section.title || "Untitled section"}</strong>
@@ -846,7 +950,12 @@ function SectionEditor({
           <div className="fb-grid">
             <label className="agency-field">
               <span>Section title</span>
-              <input value={section.title} maxLength={120} onChange={(event) => change((current) => ({ ...current, title: event.target.value }))} />
+              <input
+                data-jump="sectionTitle"
+                value={section.title}
+                maxLength={120}
+                onChange={(event) => change((current) => ({ ...current, title: event.target.value }))}
+              />
             </label>
             <label className="agency-field">
               <span>Line under the title</span>
@@ -872,7 +981,12 @@ function SectionEditor({
                 .filter((item) => item.type === "yesno" || item.type === "select");
               const controller = controllers.find((item) => item.id === field.showIf?.field);
               return (
-                <li key={field.id} data-open={expanded || undefined}>
+                <li
+                  key={field.id}
+                  data-open={expanded || undefined}
+                  data-field={field.id}
+                  data-problem={problemField === field.id || undefined}
+                >
                   <div className="fb-question">
                     <span className="fb-order">
                       <button type="button" aria-label="Move up" disabled={index === 0} onClick={() => moveField(index, -1)}>
@@ -974,7 +1088,7 @@ function SectionEditor({
                         </label>
                       )}
                       <label className="agency-field fb-span">
-                        <span>Help text under the question</span>
+                        <span>Help text</span>
                         <input value={field.help} maxLength={300} onChange={(event) => changeField(field.id, { help: event.target.value })} />
                       </label>
                       {!locked && (

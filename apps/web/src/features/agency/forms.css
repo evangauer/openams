@@ -693,14 +693,15 @@
 .fb-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px 12px;
   flex-wrap: wrap;
 }
 .fb-back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px 6px 6px;
+  min-height: 36px;
+  padding: 0 10px 0 6px;
   border-radius: 9px;
   font-size: 13.5px;
   color: var(--f-subtle);
@@ -719,7 +720,9 @@
 .fb-title input {
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  min-height: 40px;
+  padding: 4px 10px;
+  text-overflow: ellipsis;
   border: 1px solid transparent;
   border-radius: 10px;
   background: none;
@@ -744,6 +747,7 @@
 .fb-saved {
   font-size: 13px;
   color: var(--f-subtle);
+  white-space: nowrap;
 }
 .fb-saved[data-dirty] {
   color: var(--s-warn, #8f5600);
@@ -752,20 +756,28 @@
 .fb-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
   padding: 10px 14px;
   border-radius: 12px;
   background: var(--f-soft);
   font-size: 14px;
+  line-height: 1.4;
 }
 .fb-banner[data-tone="problem"] {
   background: var(--f-danger-soft);
   color: #7a1810;
 }
 .fb-banner button {
+  flex: none;
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+/* What a named problem points at, in the Questions step. */
+.fb-section[data-problem],
+.fb-questions > li[data-problem] {
+  border-color: var(--f-danger);
 }
 .fb-body {
   display: grid;
@@ -789,7 +801,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 14px 18px;
   text-align: left;
   border-bottom: 3px solid transparent;
   margin-bottom: -1px;
@@ -838,30 +850,37 @@
 }
 .fb-pane > h2 {
   font-size: 22px;
+  line-height: 1.2;
   letter-spacing: -0.02em;
 }
-.fb-lead {
+/* Two classes: the workspace zeroes the margins of every heading and paragraph. */
+.fb .fb-lead {
   max-width: 62ch;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 14.5px;
+  line-height: 1.5;
   color: var(--f-muted);
 }
-.fb-note {
-  margin-top: 14px;
+.fb .fb-note {
+  margin-top: 16px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--f-canvas);
   font-size: 13.5px;
+  line-height: 1.5;
   color: var(--f-muted);
 }
-.fb-subhead {
+.fb .fb-subhead {
   margin: 28px 0 0;
-  padding-top: 20px;
+  padding-top: 22px;
   border-top: 1px solid var(--f-line);
   font-size: 16px;
 }
+.fb .fb-pane .agency-field small[data-error] {
+  color: var(--f-danger);
+}
 .fb-lines {
-  margin-top: 22px;
+  margin-top: 26px;
 }
 .fb-lines h3 {
   font-size: 12px;
@@ -872,15 +891,18 @@
 }
 .fb-lines > div {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
 }
+/* The icon, name and tick share a row; the summary runs the full width under them. */
 .fb-lines button {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  align-content: start;
+  gap: 12px 12px;
+  padding: 16px;
   border: 1.5px solid var(--f-line-strong);
   border-radius: 13px;
   background: #fff;
@@ -906,7 +928,6 @@
   flex: none;
   width: 20px;
   height: 20px;
-  margin-top: 1px;
   border: 1.5px solid var(--f-line-strong);
   border-radius: 6px;
   background: #fff;
@@ -934,17 +955,18 @@
   color: #fff;
 }
 .fb-line-text {
-  flex: 1;
   min-width: 0;
   font-size: 14.5px;
   font-weight: 650;
+  line-height: 1.3;
 }
 .fb-lines small {
-  display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
+  grid-column: 1 / -1;
+  font-size: 13px;
   font-weight: 450;
+  line-height: 1.5;
   color: var(--f-subtle);
+  text-wrap: pretty;
 }
 .fb-sections {
   display: grid;
@@ -966,8 +988,11 @@
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  padding: 13px 16px;
+  padding: 14px 16px;
   text-align: left;
+}
+.fb-section-head > span {
+  min-width: 0;
 }
 .fb-section-head strong {
   display: block;
@@ -975,7 +1000,10 @@
   font-weight: 650;
 }
 .fb-section-head small {
+  display: block;
+  margin-top: 2px;
   font-size: 12.5px;
+  line-height: 1.4;
   color: var(--f-subtle);
 }
 .fb-section-head svg {
@@ -992,9 +1020,9 @@
 }
 .fb-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 14px;
+  margin-top: 20px;
 }
 .fb-section-body > .fb-grid {
   margin-top: 4px;
@@ -1004,8 +1032,11 @@
 }
 .fb-questions {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin-top: 16px;
+}
+.fb .fb-section-body > .fb-note {
+  margin-top: 14px;
 }
 .fb-questions > li {
   border: 1px solid var(--f-line);
@@ -1020,7 +1051,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 6px;
+  padding: 7px 8px;
 }
 .fb-order {
   display: grid;
@@ -1079,11 +1110,15 @@
   align-items: center;
   gap: 4px;
   flex: none;
-  padding: 5px 8px;
+  min-height: 30px;
+  padding: 0 8px;
   border-radius: 8px;
   font-size: 12.5px;
   color: var(--f-subtle);
   white-space: nowrap;
+}
+.fb-more svg {
+  transition: transform 200ms;
 }
 .fb-more:hover {
   background: var(--f-band);
@@ -1092,26 +1127,28 @@
 .fb-more[aria-expanded="true"] svg {
   transform: rotate(180deg);
 }
-.fb-condition {
-  padding: 0 12px 8px 36px;
+.fb .fb-condition {
+  padding: 0 12px 9px 45px;
   font-size: 12.5px;
   color: var(--f-subtle);
 }
 .fb-question-more {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 6px 12px 12px 36px;
+  gap: 14px 12px;
+  padding: 8px 12px 14px 36px;
 }
 .fb-remove {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   justify-self: start;
-  padding: 5px 9px;
+  min-height: 30px;
+  padding: 0 9px;
   border-radius: 8px;
   font-size: 13px;
   color: var(--f-subtle);
+  white-space: nowrap;
 }
 .fb-remove:hover {
   background: var(--f-danger-soft);
@@ -1121,8 +1158,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 14px;
 }
 .fb-section-foot > span {
   display: flex;
@@ -1152,6 +1190,7 @@
   width: 100%;
   min-height: 46px;
   margin-top: 12px;
+  white-space: nowrap;
   border: 1.5px dashed var(--f-line-strong);
   border-radius: 13px;
   font-size: 14px;
@@ -1175,7 +1214,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  /* Room for the chosen swatch's ring, which sits outside its circle. */
+  padding: 4px;
 }
 .fb-swatches > button {
   display: grid;
@@ -1198,18 +1239,29 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px 4px 5px;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 14px 0 4px;
   border: 1px solid var(--f-line-strong);
   border-radius: 99px;
   font-size: 13px;
+  line-height: 1;
   color: var(--f-muted);
   cursor: pointer;
 }
+.fb-custom-color:hover {
+  border-color: var(--f-ink);
+  color: var(--f-ink);
+}
+/* The workspace sizes every field input; the color well is a fixed circle inside the pill. */
 .fb-custom-color input {
   appearance: none;
   -webkit-appearance: none;
-  width: 28px !important;
-  height: 28px;
+  flex: none;
+  box-sizing: border-box;
+  width: 26px !important;
+  height: 26px !important;
+  min-height: 0 !important;
   padding: 0 !important;
   border: 0 !important;
   border-radius: 50% !important;
@@ -1231,7 +1283,8 @@
 .fb-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px 12px;
 }
 .fb-logo img {
   max-height: 44px;
@@ -1249,7 +1302,7 @@
   font-size: 20px;
   font-weight: 700;
 }
-.fb-link + .fb-note {
+.fb .fb-link + .fb-note {
   margin-top: 10px;
 }
 .fb-link {
@@ -1282,8 +1335,8 @@
 .fb-share h3 {
   font-size: 15px;
 }
-.fb-share p {
-  margin: 3px 0 10px;
+.fb .fb-share p {
+  margin: 4px 0 12px;
   font-size: 13px;
   color: var(--f-subtle);
 }
@@ -1309,8 +1362,9 @@
 }
 .fb-checklist {
   display: grid;
-  gap: 8px;
-  margin: 18px 0 22px;
+  gap: 10px;
+  margin: 20px 0 24px;
+  line-height: 1.4;
   font-size: 14px;
   color: var(--f-muted);
 }
@@ -1357,7 +1411,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  min-height: 32px;
+  margin-bottom: 12px;
+  padding-left: 2px;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1441,8 +1497,44 @@
     font-size: 13.5px;
   }
   .fb-steps button {
-    padding: 12px 10px;
+    padding: 12px 6px;
     justify-content: center;
+  }
+  /* Back and save share the first row; the name gets a row of its own so it isn't cut off. */
+  .fb-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .fb-head-actions {
+    justify-content: flex-end;
+    min-width: 0;
+  }
+  .fb-title {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+  }
+  .fb-title input {
+    padding-left: 6px;
+    font-size: 20px;
+  }
+  .fb-lines > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fb-question-more {
+    padding-left: 12px;
+  }
+  .fb .fb-condition {
+    padding-left: 12px;
+  }
+  .fb-required {
+    margin-left: 28px;
+  }
+  .fb-more {
+    margin-left: auto;
+  }
+  .fb-device[data-device="phone"] {
+    max-width: 100%;
   }
   .fb-pane {
     padding: 20px 16px 22px;
