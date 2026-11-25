@@ -37,7 +37,7 @@ test("the invitation names the agency, inviter, role, address and expiry, and li
   // Every link is the app's own origin: the logo's home page, and the join page with the
   // invitation and its secret after "#", which browsers never send to a server.
   const hrefs = new Set(html.match(/href="[^"]*"/g));
-  assert.ok(hrefs.has(`href="${LINK.replace("&", "&#38;")}"`), [...hrefs].join(" "));
+  assert.ok(hrefs.has(`href="${LINK.replaceAll("&", "&#38;")}"`), [...hrefs].join(" "));
   for (const href of hrefs) {
     const url = new URL(href.slice(6, -1).replaceAll("&#38;", "&"));
     assert.equal(url.origin, "https://ams.fixture.example");
