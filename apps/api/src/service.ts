@@ -67,7 +67,7 @@ const FormReceipt = AmsFormSubmissionSchema.pick({
   files: true,
   digest: true,
 })
-  .extend({ submissionId: z.string().uuid() })
+  .extend({ submissionId: z.string().uuid(), promotionId: z.uuid().optional() })
   .strict();
 export type AmsFormReceipt = z.input<typeof FormReceipt>;
 /** A submission as plain text, for the note left on the account it is filed to. */
@@ -3144,7 +3144,11 @@ export class AmsService {
             "form_closed",
             "This form is not taking submissions.",
           );
-        const { submissionId, ...received } = parseAms(FormReceipt, command.data);
+        const { submissionId, promotionId, ...received } = parseAms(FormReceipt, command.data);
+        if (promotionId) {
+          if (!tx.consumeFormPromotion) throw new Error("Missing form promotion store.");
+          await tx.consumeFormPromotion(promotionId, submissionId);
+        }
         const canOwn = (id: string | null | undefined) =>
           Boolean(id) &&
           members.some(

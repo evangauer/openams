@@ -253,7 +253,8 @@ is deleted. Files left waiting by a client who never sends the form have to expi
   }
   ```
 
-  `gcloud storage buckets update gs://YOUR_BUCKET --lifecycle-file=lifecycle.json`
+  In the bucket lifecycle editor, add this rule alongside existing rules. A lifecycle
+  file supplied to `gcloud storage buckets update` replaces the whole configuration.
 
   The rule is what guarantees a waiting file goes away. The API also deletes one as soon
   as the client removes it or the form is sent, when its service account is allowed to
@@ -305,3 +306,17 @@ Email to the agency and the client when a submission arrives, a link that asks a
 client to update what you already hold, service forms (certificate requests, policy
 changes, first notice of loss) that open the matching service record, and a client
 portal built on the same pages.
+
+### Recover interrupted file copies on Firebase
+
+Schedule `node scripts/recover-form-uploads.mjs PROJECT DATABASE BUCKET` daily from
+the built application. Supply the same project, Firestore database and bucket as the
+application. A maintenance identity needs access to the form promotion journal,
+storage counters and deletion of form attachment objects. The web runtime only
+needs to create and read those objects.
+
+Each request reserves its bytes and records its unique object paths before copying.
+Saving the submission consumes that reservation's journal entry in the same Firestore
+transaction. Recovery claims entries older than 48 hours, deletes their uncommitted
+copies and releases their reserved bytes exactly once. Keep request and storage
+write timeouts below that interval. Earlier submissions retain their original paths.

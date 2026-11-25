@@ -14,6 +14,7 @@ import { mailboxRuntime } from "./mailbox-oauth.js";
 import { AmsError } from "./repository.js";
 import { FirestoreAmsRepository } from "./firebase/firestore-repository.js";
 import { FirestoreAmsChat } from "./firebase/firestore-chat.js";
+import { formPromotions } from "./firebase/form-promotions.js";
 import { FirestoreFormLinks } from "./firebase/firestore-form-links.js";
 import { FORM_PENDING_PREFIX } from "./form-links.js";
 import { CloudStorageAmsFiles } from "./firebase/storage-files.js";
@@ -264,6 +265,7 @@ app.use(
     chat: new FirestoreAmsChat(db),
     forms: {
       links: new FirestoreFormLinks(db),
+      promotions: formPromotions(db, bucket, agencyLimits.storageBytes),
       // Unsent uploads wait under their own prefix, outside any agency's storage count.
       // Give the bucket a lifecycle rule that deletes what is left there (docs/forms.md).
       pending: new CloudStorageAmsFiles(bucket, { prefix: FORM_PENDING_PREFIX }),

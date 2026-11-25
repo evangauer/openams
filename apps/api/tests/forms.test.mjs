@@ -23,9 +23,9 @@ import {
   amsFormValueText,
 } from "@openams/contracts";
 import { createAmsRouter } from "../dist/routes.js";
-import { MemoryFormLinks, SqliteFormLinks, formPendingKey, formSubmissionId, formUploadKey, newFormLinkId } from "../dist/form-links.js";
+import { MemoryFormLinks, SqliteFormLinks, formPendingKey, formSubmissionId, newFormLinkId } from "../dist/form-links.js";
 import { SqliteAmsRepository } from "../dist/sqlite-repository.js";
-import { openRepository, openFiles, openPendingFiles } from "./support/backend.mjs";
+import { backend, firebaseServices, openRepository, openFiles, openPendingFiles } from "./support/backend.mjs";
 
 const PDF = Buffer.from("%PDF-1.4\n% fixture declarations page\n");
 const team = () => [
@@ -366,7 +366,7 @@ test("a published form takes a submission with files, and staff file it to a new
   // them, and the waiting copy is gone.
   const savedId = formSubmissionId(form.id, page);
   await assert.rejects(api.pending.get(formPendingKey("agency-1", savedId, uploaded.body.sha256)));
-  assert.deepEqual(await api.files.get(formUploadKey("agency-1", savedId, uploaded.body.sha256)), PDF);
+  assert.deepEqual(await api.files.get((await api.list("formsubmissions"))[0].data.files[0].storageKey), PDF);
   // A file the client takes back before sending is deleted, not kept.
   const other = randomUUID();
   const kept = await api.upload(link, other, "second.pdf", Buffer.concat([PDF, Buffer.from("second")]));
@@ -657,6 +657,56 @@ test("one client takes only its share of a form, and an unsaved submission leave
   assert.equal(stored.length, 1);
   assert.deepEqual(removed, stored, "the copy made for the unsaved submission is removed");
   assert.equal((await api.list("formsubmissions")).length, 3, "nothing was saved");
+});
+
+test("a revision change after copying a file leaves it pending for resubmission", async (t) => {
+  const api = await harness(t);
+  const form = await published(api);
+  const page = randomUUID();
+  const upload = await api.upload(form.data.linkId, page, "fixture.pdf", PDF);
+  const put = api.files.put.bind(api.files);
+  let copied;
+  api.files.put = async (key, ...args) => {
+    copied = key;
+    await put(key, ...args);
+    const edited = await api.command("forms", "update", { name: "Updated intake" }, form);
+    assert.equal(edited.status, 200);
+  };
+  const payload = { id: page, revision: form.revision, lines: [], answers: autoAnswers(), elapsedMs: 60_000,
+    files: [{ section: "auto_current", item: 0, field: "declarations", name: "fixture.pdf", sha256: upload.body.sha256, bytes: PDF.length }] };
+  const stale = await api.submit(form.data.linkId, payload);
+  assert.equal(stale.body.error, "form_updated");
+  assert.ok(copied);
+  await assert.rejects(api.files.get(copied));
+  assert.equal((await api.list("formsubmissions")).length, 0);
+  api.files.put = put;
+  const retry = await api.submit(form.data.linkId, { ...payload, revision: stale.body.form.revision });
+  assert.equal(retry.status, 201, JSON.stringify(retry.body));
+});
+
+test("Firebase submission consumes the upload journal and keeps the downloaded bytes", { skip: backend !== "firebase" }, async (t) => {
+  const { firestore, storage } = await firebaseServices();
+  const { formPromotions } = await import("../dist/firebase/form-promotions.js");
+  const bucket = storage.bucket();
+  const promotions = formPromotions(firestore, bucket, 500_000_000);
+  let attempt;
+  const begin = promotions.begin;
+  promotions.begin = async (id, ...args) => {
+    attempt = id;
+    await begin(id, ...args);
+  };
+  const api = await harness(t, { promotions });
+  const form = await published(api);
+  const page = randomUUID();
+  const upload = await api.upload(form.data.linkId, page, "fixture.pdf", PDF);
+  const payload = { id: page, revision: form.revision, lines: [], answers: autoAnswers(), elapsedMs: 60_000,
+    files: [{ section: "auto_current", item: 0, field: "declarations", name: "fixture.pdf", sha256: upload.body.sha256, bytes: PDF.length }] };
+  const sent = await api.submit(form.data.linkId, payload);
+  assert.equal(sent.status, 201, JSON.stringify(sent.body));
+  assert.equal((await firestore.collection("form_promotions").doc(attempt).get()).exists, false);
+  const [record] = await api.list("formsubmissions");
+  assert.deepEqual((await bucket.file(record.data.files[0].storageKey).download())[0], PDF);
+  assert.equal((await api.submit(form.data.linkId, payload)).status, 200);
 });
 
 test("a follow-up outlives the person it was given to", async (t) => {

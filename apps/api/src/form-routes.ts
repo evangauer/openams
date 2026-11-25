@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import express, { type Request, type RequestHandler, type Response, type Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
@@ -44,6 +45,10 @@ import type { AmsRouterDependencies } from "./routes.js";
 /** Hosted forms. Without this dependency the workspace hides them and no link resolves. */
 export interface AmsFormsDependency {
   links: AmsFormLinks;
+  promotions?: {
+    begin(attempt: string, tenantId: string, submissionId: string, files: { sha256: string; bytes: number }[]): Promise<void>;
+    put: AmsFiles["put"];
+  };
   /**
    * False where forms can be built and previewed but never opened to the public: an
    * environment anyone can reach without an account must not host public forms.
@@ -293,7 +298,9 @@ export function mountFormRoutes(
       );
       if (!submission || submission.archivedAt || !file)
         throw new AmsError(404, "not_found", "File not found.");
+      const attempt = z.uuid().safeParse(file.storageKey.split("/").at(-2));
       if (
+        !(attempt.success && file.storageKey === formUploadKey(actor.tenantId, submission.id, file.sha256, attempt.data)) &&
         file.storageKey !==
         formUploadKey(actor.tenantId, submission.id, file.sha256)
       )
@@ -699,24 +706,29 @@ export function mountFormRoutes(
           !submissionsPerForm.take(form.id)
         )
           throw busy();
+        const promotionId = checked.length ? randomUUID() : undefined;
+        if (promotionId && forms.promotions)
+          await forms.promotions.begin(promotionId, tenantId, submissionId,
+            checked.map(({ upload }) => ({ sha256: upload.sha256, bytes: upload.bytes })));
         const files: AmsData<"formsubmissions">["files"] = [];
-        // If nothing ends up saved, the copies made for it are nobody's documents: take
-        // them back out so they don't stay charged to the agency. A store that may not
-        // delete simply keeps them.
+        // Local stores remove only copies owned by this attempt. An ambiguous commit
+        // must be checked before removing a file the agency might already own.
         const abandon = async () => {
+          if (forms.promotions) return; // The durable journal owns cleanup and quota.
           const saved = await deps
             .repository()
             .get(tenantId, "formsubmissions", submissionId)
             .catch(() => "unknown" as const);
-          if (saved) return;
+          if (saved === "unknown") return;
           for (const file of files)
-            await deps.files.remove?.(file.storageKey).catch(() => undefined);
+            if (!saved?.data.files.some((kept) => kept.storageKey === file.storageKey))
+              await deps.files.remove?.(file.storageKey).catch(() => undefined);
         };
         try {
           for (const { upload, bytes, name, mediaType } of checked) {
-            const storageKey = formUploadKey(tenantId, submissionId, upload.sha256);
+            const storageKey = formUploadKey(tenantId, submissionId, upload.sha256, promotionId);
             // Now it joins the agency's documents (and counts toward its storage).
-            await deps.files.put(storageKey, bytes, mediaType);
+            await (forms.promotions ?? deps.files).put(storageKey, bytes, mediaType);
             files.push({
               id: `f${files.length + 1}`,
               section: upload.section,
@@ -741,6 +753,7 @@ export function mountFormRoutes(
           const snapshot = amsFormSnapshot(form.data, input);
           const result = await service().receiveFormSubmission(tenantId, form, {
             submissionId,
+            ...(forms.promotions && promotionId ? { promotionId } : {}),
             lines: amsFormChosenLines(form.data, input.lines),
             contact: amsFormContact(snapshot),
             sections: snapshot,
@@ -756,9 +769,18 @@ export function mountFormRoutes(
           return;
         } catch (error) {
           // The form was edited between the check and the save: check again, once.
+          await abandon();
+          if (error instanceof AmsError && error.code === "idempotency_conflict") {
+            const winner = await deps.repository().get(tenantId, "formsubmissions", submissionId);
+            if (winner?.data.digest === sent) {
+              response.json({ ok: true });
+              return;
+            }
+            if (winner)
+              throw new AmsError(409, "already_received", "The first submission was saved. Later changes were not saved.");
+          }
           if (error instanceof AmsError && error.code === "stale_record" && attempt < 1)
             continue;
-          await abandon();
           if (error instanceof AmsError && error.code === "record_too_large")
             throw new AmsError(
               413,

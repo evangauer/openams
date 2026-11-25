@@ -49,8 +49,8 @@ export function formSubmissionId(formId: string, clientId: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 /** Where a submitted file is kept: with the agency's documents, before and after filing. */
-export const formUploadKey = (tenantId: string, submissionId: string, sha256: string) =>
-  `ams-documents/${tenantId}/forms/${submissionId}/${sha256}`;
+export const formUploadKey = (tenantId: string, submissionId: string, sha256: string, attempt?: string) =>
+  `ams-documents/${tenantId}/forms/${submissionId}/${attempt ? attempt + "/" : ""}${sha256}`;
 /**
  * Where a file waits between being attached and the client pressing Send. This prefix
  * holds nothing else, so a deployment can expire whatever is left in it.
