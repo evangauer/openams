@@ -425,11 +425,12 @@ function FileQuestion({
   onRemove: (key: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const group = useRef<HTMLDivElement>(null);
   const drop = useRef<HTMLButtonElement>(null);
   const [over, setOver] = useState(false);
   const full = uploads.length >= AMS_FORM_UPLOADS_PER_FIELD;
   return (
-    <div className="hf-files" role="group" aria-labelledby={labelledBy} aria-describedby={describedBy}>
+    <div ref={group} className="hf-files" role="group" aria-labelledby={labelledBy} aria-describedby={describedBy}>
       {uploads.length > 0 && (
         <ul>
           {uploads.map((upload) => (
@@ -458,8 +459,13 @@ function FileQuestion({
                 aria-label={`Remove ${upload.name}`}
                 onClick={() => {
                   onRemove(upload.key);
-                  // The button pressed is gone: focus moves to adding a file, in place.
-                  window.requestAnimationFrame(() => drop.current?.focus({ preventScroll: true }));
+                  // The button pressed is gone: focus moves to adding a file, in place,
+                  // or to the next file when the question is still full.
+                  window.requestAnimationFrame(() =>
+                    (drop.current ?? group.current?.querySelector<HTMLElement>("li button"))?.focus({
+                      preventScroll: true,
+                    }),
+                  );
                 }}
               >
                 <X size={15} />

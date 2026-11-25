@@ -6,8 +6,8 @@ import { useEffect, useRef, type RefObject } from "react";
 /** `{ type, height }`: how tall the form is, in CSS pixels. The page sizes the frame to it. */
 export const EMBED_HEIGHT_MESSAGE = "openams:form-height";
 /**
- * `{ type, top }`: a place in the form, in CSS pixels from the top of the frame, that the
- * visitor should be looking at and isn't. The page scrolls its own window there.
+ * `{ type, top }`: a place the visitor should be looking at and isn't, in CSS pixels
+ * below the frame's top edge. The page scrolls its own window there.
  */
 export const EMBED_SHOW_MESSAGE = "openams:form-show";
 /** How long a page has to act on a height before it is taken not to be listening. */
@@ -56,23 +56,30 @@ export function useEmbedFrame(root: RefObject<HTMLElement | null>, embed: boolea
     let timers: number[] = [];
     const fits = () => Math.abs(window.innerHeight - reported) <= 1;
     const sizedByPage = (sized: boolean) => void (page.style.overflowY = sized ? "hidden" : "auto");
-    const post = () => window.parent.postMessage({ type: EMBED_HEIGHT_MESSAGE, height: reported }, "*");
+    // Says the height, then judges whether the page acted on it.
+    const post = () => {
+      window.parent.postMessage({ type: EMBED_HEIGHT_MESSAGE, height: reported }, "*");
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers = [
+        window.setTimeout(() => sizedByPage(fits()), FOLLOW_MS),
+        window.setTimeout(() => {
+          if (!fits()) window.parent.postMessage({ type: EMBED_HEIGHT_MESSAGE, height: reported }, "*");
+        }, LATE_MS),
+      ];
+    };
     const report = () => {
       const height = Math.ceil(node.getBoundingClientRect().height);
       if (height === reported) return;
       reported = height;
       post();
-      timers.forEach((timer) => window.clearTimeout(timer));
-      timers = [
-        window.setTimeout(() => sizedByPage(fits()), FOLLOW_MS),
-        window.setTimeout(() => {
-          if (!fits()) post();
-        }, LATE_MS),
-      ];
     };
-    // The frame was resized: by the page to what was reported, or by something else.
+    // The frame was resized. To what was reported: the page is sizing it. To anything
+    // else (the page's own limit on its height, a rotated phone, a page that redrew the
+    // frame at its first height): say the height again and judge again, so the form is
+    // never left unable to scroll in a frame that doesn't hold it.
     const resized = () => {
       if (fits()) sizedByPage(true);
+      else post();
     };
     // Until a page shows otherwise it is taken to size the frame, so the first layout
     // is never one squeezed by a scrollbar.
@@ -93,14 +100,20 @@ export function useEmbedFrame(root: RefObject<HTMLElement | null>, embed: boolea
 /**
  * Whether an element is on screen in the visitor's own window, which a framed page can't
  * read from its own scroll position. An observer with no root measures against that
- * window through every frame in between. `whole` asks for nearly all of it, not any of it.
+ * window through every frame in between. `whole` asks for it from its top edge down:
+ * nearly all of it, or a window's worth of something taller than the window.
  */
 function onScreen(mark: Element, whole: boolean): Promise<boolean> {
   return new Promise((resolve) => {
     const observer = new IntersectionObserver((entries) => {
       observer.disconnect();
       const entry = entries[entries.length - 1]!;
-      resolve(whole ? entry.intersectionRatio >= 0.9 : entry.isIntersecting);
+      if (!whole || !entry.isIntersecting) return resolve(entry.isIntersecting);
+      const { boundingClientRect: all, intersectionRect: shown } = entry;
+      resolve(
+        entry.intersectionRatio >= 0.9 ||
+          (shown.top - all.top < 1 && shown.height >= Math.min(all.height, 160) - 1),
+      );
     });
     observer.observe(mark);
     // An element that left the page is never reported on: nothing to bring into view.
@@ -141,7 +154,9 @@ export async function revealInFrame(
   if (!framed()) return;
   await scrolled();
   if (await onScreen(mark, whole)) return;
-  const top = Math.max(0, Math.round(node.getBoundingClientRect().top + window.scrollY - above));
+  // From the frame's top edge, which the page can place; not from the top of the form,
+  // which is somewhere else once the form has scrolled inside its frame.
+  const top = Math.max(0, Math.round(node.getBoundingClientRect().top - above));
   window.parent.postMessage({ type: EMBED_SHOW_MESSAGE, top }, "*");
 }
 

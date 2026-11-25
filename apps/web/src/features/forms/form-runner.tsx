@@ -841,7 +841,13 @@ export function FormRunner({
           </span>
         </legend>
         {count > section.repeat.min && (
-          <button type="button" className="hf-item-remove" onClick={() => removeItem(section, index)}>
+          <button
+            type="button"
+            className="hf-item-remove"
+            // A file on its way is filed by position; nothing moves until it has landed.
+            disabled={draft.uploads.some((upload) => upload.section === section.id && upload.status === "uploading")}
+            onClick={() => removeItem(section, index)}
+          >
             <Trash2 size={14} aria-hidden="true" />
             Remove
           </button>

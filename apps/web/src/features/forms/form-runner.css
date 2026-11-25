@@ -712,9 +712,13 @@
   font-weight: 550;
   color: var(--hf-subtle);
 }
-.hf-item-remove:hover {
+.hf-item-remove:hover:not(:disabled) {
   color: var(--hf-danger);
   background: var(--hf-danger-soft);
+}
+.hf-item-remove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .hf-add {
   display: flex;
