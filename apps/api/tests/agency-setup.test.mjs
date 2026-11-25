@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AmsService } from "../dist/service.js";
 import { AmsError } from "../dist/repository.js";
+import { DEMO_BOOK } from "../dist/demo-book.js";
 import { LocalAmsDemo, localDemoToken } from "../dist/local-demo.js";
 import { openRepository, openFiles } from "./support/backend.mjs";
 import { AmsListSchema } from "@openams/contracts";
@@ -28,8 +29,7 @@ const reject = (promise, code) =>
   assert.rejects(promise, (error) => error.code === code);
 async function fixture(t, adapter = "sqlite") {
   const dir = await mkdtemp(join(tmpdir(), "ams-setup-"));
-  const repository =
-    openRepository(join(dir, "records.sqlite"));
+  const repository = openRepository(join(dir, "records.sqlite"));
   const files = openFiles(join(dir, "files"));
   const members = ["admin", "manager", "member", "accountant", "viewer"].map(
     (role) => ({
@@ -60,9 +60,21 @@ async function fixture(t, adapter = "sqlite") {
         : {}),
       ...extra,
     });
-  const list = async (tenantId, kind) =>
-    (await repository.list(tenantId, kind, AmsListSchema.parse({ limit: 100 })))
-      .items;
+  // Every record of a kind, across pages: the demo book holds more than one page.
+  const list = async (tenantId, kind) => {
+    const items = [];
+    let cursor;
+    do {
+      const page = await repository.list(
+        tenantId,
+        kind,
+        AmsListSchema.parse({ limit: 100, ...(cursor ? { cursor } : {}) }),
+      );
+      items.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return items;
+  };
   t.after(async () => {
     repository.close?.();
     await rm(dir, { recursive: true, force: true });
@@ -175,6 +187,15 @@ for (const adapter of ["sqlite"]) {
   });
 }
 
+// The walkthrough account and its policy, plus the fictional book around it.
+const demoAccounts = 1 + DEMO_BOOK.length;
+const demoPolicies =
+  1 +
+  DEMO_BOOK.flatMap((a) => a.policies).reduce(
+    (n, p) => n + (p.priorPremium ? 2 : 1),
+    0,
+  );
+
 test("demo resumes after restart and reset creates an isolated copy while preserving the working book", async (t) => {
   const f = await fixture(t);
   await f.run("workspace.configure", "workspace", profile);
@@ -189,7 +210,7 @@ test("demo resumes after restart and reset creates an isolated copy while preser
     expectedTenantId: null,
   };
   const first = await demo.start(command);
-  assert.equal((await f.list(first.tenantId, "accounts")).length, 3);
+  assert.equal((await f.list(first.tenantId, "accounts")).length, demoAccounts);
   assert.equal((await f.list(actor.tenantId, "accounts")).length, 1);
   assert.equal(
     (await f.repository.get(actor.tenantId, "accounts", own.id)).version,
@@ -245,7 +266,7 @@ test("demo resumes after restart and reset creates an isolated copy while preser
   );
   assert.equal(
     (await f.list(first.tenantId, "accounts")).length,
-    3,
+    demoAccounts,
     "prior demo is retained",
   );
   assert.equal((await f.list(actor.tenantId, "accounts")).length, 1);
@@ -284,9 +305,16 @@ test("interrupted demo preparation resumes committed steps without duplicate acc
     restart: false,
     expectedTenantId: null,
   });
-  assert.equal((await f.list(result.tenantId, "accounts")).length, 3);
-  assert.equal((await f.list(result.tenantId, "commissions")).length, 1);
-  assert.equal((await f.list(result.tenantId, "correspondence")).length, 1);
+  assert.equal(
+    (await f.list(result.tenantId, "accounts")).length,
+    demoAccounts,
+  );
+  assert.equal(
+    (await f.list(result.tenantId, "commissions")).length,
+    demoPolicies,
+  );
+  // The walkthrough email and three more filed with attachments.
+  assert.equal((await f.list(result.tenantId, "correspondence")).length, 4);
   assert.equal((await f.list(result.tenantId, "workspace")).length, 1);
 });
 

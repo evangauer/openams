@@ -28,7 +28,11 @@ export interface AmsTransaction {
   accountEpoch(id: string): Promise<number>;
   advanceAccountEpoch(id: string): Promise<number>;
   get<K extends AmsKind>(kind: K, id: string): Promise<AmsRecord<K> | null>;
-  revision(kind: AmsKind, id: string, revision: number): Promise<AmsRecord | null>;
+  revision(
+    kind: AmsKind,
+    id: string,
+    revision: number,
+  ): Promise<AmsRecord | null>;
   put(record: AmsRecord): void;
   receipt(id: string): Promise<AmsReceipt | null>;
   saveReceipt(id: string, value: AmsReceipt): void;

@@ -184,7 +184,9 @@ export class SqliteAmsRepository implements AmsRepository {
             this.read(tenant, kind, id),
           revision: async (kind, id, revision) => {
             const row = this.db
-              .prepare("SELECT value FROM ams_revisions WHERE tenant=? AND id=?")
+              .prepare(
+                "SELECT value FROM ams_revisions WHERE tenant=? AND id=?",
+              )
               .get(tenant, revisionKey({ kind, id, revision }));
             return row ? hydrate(String(row.value)) : null;
           },
@@ -255,15 +257,25 @@ export class SqliteAmsRepository implements AmsRepository {
    * `tenant` column (records, history, chat, mailbox review). Only for demo sandboxes.
    */
   deleteTenant(tenant: string) {
-    if (!/^local_demo_[a-f0-9]{24}$/.test(tenant)) throw new Error("Only a demo tenant can be deleted.");
+    if (!/^local_demo_[a-f0-9]{24}$/.test(tenant))
+      throw new Error("Only a demo tenant can be deleted.");
     return this.exclusive((db) => {
-      const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[])
+      const tables = (
+        db
+          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+          .all() as { name: string }[]
+      )
         .map((row) => row.name)
         .filter((name) => /^ams_[a-z_]+$/.test(name))
-        .filter((name) => (db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).some((column) => column.name === "tenant"));
+        .filter((name) =>
+          (
+            db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]
+          ).some((column) => column.name === "tenant"),
+        );
       db.exec("BEGIN");
       try {
-        for (const name of tables) db.prepare(`DELETE FROM ${name} WHERE tenant=?`).run(tenant);
+        for (const name of tables)
+          db.prepare(`DELETE FROM ${name} WHERE tenant=?`).run(tenant);
         db.exec("COMMIT");
       } catch (error) {
         db.exec("ROLLBACK");

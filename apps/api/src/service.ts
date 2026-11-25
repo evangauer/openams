@@ -1316,7 +1316,11 @@ export class AmsService {
           );
         reason();
         if (command.action === "restore" && !original.archivedAt)
-          throw new AmsError(409, "not_archived", "This record is not archived.");
+          throw new AmsError(
+            409,
+            "not_archived",
+            "This record is not archived.",
+          );
         let data = original.data;
         // Archival is record metadata, not an account relationship. Older
         // releases replaced the relationship with "archived"; recover it from

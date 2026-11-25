@@ -2,11 +2,7 @@ import express from "express";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  AmsActor,
-  AmsMember,
-  AmsRole,
-} from "@openams/contracts";
+import type { AmsActor, AmsMember, AmsRole } from "@openams/contracts";
 import { createAmsRouter } from "./routes.js";
 import { SqliteAmsRepository } from "./sqlite-repository.js";
 import { LocalAmsFiles } from "./files.js";
@@ -35,7 +31,8 @@ if (process.env.AMS_AUTH_MODE === "firebase")
 const publicDemo = process.env.AMS_PREVIEW === "public";
 const hostedPreview =
   publicDemo ||
-  (process.env.AMS_PREVIEW === "iap" && Boolean(process.env.AMS_PREVIEW_IAP_AUDIENCE));
+  (process.env.AMS_PREVIEW === "iap" &&
+    Boolean(process.env.AMS_PREVIEW_IAP_AUDIENCE));
 if (
   (process.env.NODE_ENV !== "development" && !hostedPreview) ||
   process.env.AMS_LOCAL_ENABLED !== "1"
@@ -144,16 +141,25 @@ app.use(express.json({ limit: "300kb" }));
 // The web app opens a sandbox for a visitor. Only it holds the launcher's token.
 if (sandboxes)
   app.post("/demo/sandboxes", (request, response, next) => {
-    const bearer = request.header("authorization")?.replace(/^Bearer /, "") ?? "";
+    const bearer =
+      request.header("authorization")?.replace(/^Bearer /, "") ?? "";
     if (!sameToken(bearer, tokens.admin)) {
       response.status(404).json({ error: "not_found", message: "Not found." });
       return;
     }
-    const { token, replaces } = (request.body ?? {}) as { token?: unknown; replaces?: unknown };
+    const { token, replaces } = (request.body ?? {}) as {
+      token?: unknown;
+      replaces?: unknown;
+    };
     sandboxes
-      .create(String(token ?? ""), typeof replaces === "string" ? replaces : null)
+      .create(
+        String(token ?? ""),
+        typeof replaces === "string" ? replaces : null,
+      )
       .then((sandbox) =>
-        response.status(201).json({ expiresAt: new Date(sandbox.expiresAt).toISOString() }),
+        response
+          .status(201)
+          .json({ expiresAt: new Date(sandbox.expiresAt).toISOString() }),
       )
       .catch(next);
   });
@@ -225,12 +231,21 @@ app.use(
     // The public demo connects to no mailbox.
     ...(sandboxes
       ? {}
-      : { mailboxes: { store: new SqliteMailboxStore(repository), ...mailboxRuntime() } }),
+      : {
+          mailboxes: {
+            store: new SqliteMailboxStore(repository),
+            ...mailboxRuntime(),
+          },
+        }),
     demo: {
       info: demoInfo,
       start: async (input) => {
         if (sandboxes)
-          throw new AmsError(404, "not_found", "Start a fresh demo from the demo banner.");
+          throw new AmsError(
+            404,
+            "not_found",
+            "Start a fresh demo from the demo banner.",
+          );
         const info = await demo.start(input);
         await seedDemoChat(info);
         return info;
@@ -292,7 +307,9 @@ reminderTimer.unref();
 // Expired sandboxes are deleted within a minute of their time.
 if (sandboxes)
   setInterval(() => {
-    sandboxes.sweep().catch(() => console.error("Demo cleanup failed; it will be retried."));
+    sandboxes
+      .sweep()
+      .catch(() => console.error("Demo cleanup failed; it will be retried."));
   }, 60_000).unref();
 runReminders();
 const server = app.listen(
