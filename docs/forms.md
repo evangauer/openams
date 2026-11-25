@@ -57,7 +57,8 @@ The page shows the agency's name, color and logo. The client picks what they wan
 for, moves through one section per step, attaches files where asked, reviews everything
 and sends it. Answers are kept in that browser tab's session storage, so a refresh does
 not lose them; they leave the device only when the client presses Send. Files upload as
-they are attached, and one the client removes is deleted.
+they are attached. One the client removes is never sent to the agency, and is deleted
+(at once, or within two days: see [uploads wait](#limits-and-protections)).
 
 Answers are tidied as they are typed: a phone number becomes (518) 555-0142, a dollar
 amount 250,000, a date MM/DD/YYYY (slashes optional), and a ZIP code, VIN or federal tax
@@ -210,6 +211,22 @@ is deleted. Files left waiting by a client who never sends the form have to expi
   ```
 
   `gcloud storage buckets update gs://YOUR_BUCKET --lifecycle-file=lifecycle.json`
+
+  The rule is what guarantees a waiting file goes away. The API also deletes one as soon
+  as the client removes it or the form is sent, when its service account is allowed to
+  (`storage.objects.delete`). An account that can only create and read objects, as in
+  [self-hosting](self-hosting.md), leaves them for the rule: a removed file is then
+  attached to nothing, is never filed, and is gone within two days. To have them deleted
+  at once without letting the API delete an agency's documents, grant delete for this
+  prefix only:
+
+  ```sh
+  gcloud iam roles create openamsFormUploads --project "$PROJECT" \
+    --title "OpenAMS unsent form uploads" --permissions storage.objects.delete
+  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" \
+    --member "serviceAccount:$SA" --role "projects/$PROJECT/roles/openamsFormUploads" \
+    --condition "title=form-uploads,expression=resource.name.startsWith('projects/_/buckets/$BUCKET/objects/form-uploads/')"
+  ```
 
 Other protections:
 
