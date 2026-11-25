@@ -18,6 +18,7 @@ import { z } from "zod";
 import { Timestamp, type Firestore } from "firebase-admin/firestore";
 import type { AmsActor } from "@openams/contracts";
 import { IDENTITY_COLLECTIONS } from "./identity.js";
+import { MAX_INVITATION_TTL_HOURS } from "./invitation-policy.js";
 
 export const ACCESS_COLLECTION = "agency_access";
 export const ACCESS_PATH = "/internal/access/v1/agencies/:tenantId";
@@ -57,9 +58,12 @@ export function externalAccessFromEnv(env: Record<string, string | undefined> = 
   return config;
 }
 
+const InvitationTtlHours = z.number().int().min(1).max(MAX_INVITATION_TTL_HOURS);
 const StoredAccess = z.object({
   state: z.enum(ACCESS_STATES),
   message: z.string().max(300).nullable().optional(),
+  /** This agency's invitation lifetime in hours; absent or null: the deployment's. */
+  invitationTtlHours: InvitationTtlHours.nullable().optional(),
 });
 const ACCESS_CACHE_MS = 30_000;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -81,20 +85,26 @@ const refusals: Record<Exclude<AccessState, "active">, { code: string; message: 
 
 /** Enforces each agency's access state on `/ams` and reports it to the workspace. */
 export function createAccessControl(deps: { db: Firestore; enabled: boolean; actor: (response: Response) => AmsActor | undefined }) {
-  const cache = new Map<string, { at: number; value: AccessView }>();
-  async function view(tenantId: string): Promise<AccessView> {
+  const cache = new Map<string, { at: number; value: AccessView; invitationTtlHours: number | null }>();
+  async function read(tenantId: string) {
     const hit = cache.get(tenantId);
-    if (hit && Date.now() - hit.at < ACCESS_CACHE_MS) return hit.value;
+    if (hit && Date.now() - hit.at < ACCESS_CACHE_MS) return hit;
     const snapshot = await deps.db.collection(ACCESS_COLLECTION).doc(tenantId).get();
     const parsed = snapshot.exists ? StoredAccess.safeParse(snapshot.data()) : null;
     // No record yet: a new agency waits for the outside system to activate it.
     const value: AccessView = parsed?.success
       ? { state: parsed.data.state, message: parsed.data.message ?? null }
       : { state: "pending", message: null };
+    const entry = {
+      at: Date.now(),
+      value,
+      invitationTtlHours: parsed?.success ? (parsed.data.invitationTtlHours ?? null) : null,
+    };
     if (cache.size > 5000) cache.clear();
-    cache.set(tenantId, { at: Date.now(), value });
-    return value;
+    cache.set(tenantId, entry);
+    return entry;
   }
+  const view = async (tenantId: string): Promise<AccessView> => (await read(tenantId)).value;
   const gate: RequestHandler = async (request, response, next) => {
     const actor = deps.actor(response);
     if (!deps.enabled || !actor) {
@@ -117,6 +127,9 @@ export function createAccessControl(deps: { db: Firestore; enabled: boolean; act
     gate,
     /** The agency's access for /identity/me, or null when access control is off. */
     access: async (tenantId: string) => (deps.enabled ? view(tenantId) : null),
+    /** The agency's own invitation lifetime in hours, or null for the deployment's. */
+    invitationTtlHours: async (tenantId: string) =>
+      deps.enabled ? (await read(tenantId)).invitationTtlHours : null,
     /** Drop a cached state so a change applies at once on this instance. */
     forget: (tenantId: string) => cache.delete(tenantId),
   };
@@ -128,6 +141,7 @@ const AccessBody = z
   .object({
     state: z.enum(ACCESS_STATES),
     message: z.string().trim().max(300).regex(noControl).nullable().default(null),
+
   })
   .strict();
 
@@ -171,7 +185,44 @@ export function createAccessApi(deps: {
         tenantId,
         state: parsed?.success ? parsed.data.state : "pending",
         message: parsed?.success ? (parsed.data.message ?? null) : null,
+        invitationTtlHours: parsed?.success ? (parsed.data.invitationTtlHours ?? null) : null,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put(`${ACCESS_PATH}/invitation-lifetime`, off, deps.authorize, async (request, response, next) => {
+    try {
+      const tenantId = parseId(request, response);
+      if (!tenantId) return;
+      const body = z.object({ hours: InvitationTtlHours.nullable() }).strict().safeParse(request.body);
+      if (!body.success) {
+        response.status(400).json({ error: "invalid_request", message: "Send whole hours from 1 to 720 or null." });
+        return;
+      }
+      const revision = await deps.db.runTransaction(async (tx) => {
+        const [agency, before] = await tx.getAll(agencyRef(tenantId), accessRef(tenantId));
+        if (!agency.exists) return null;
+        const revision = (before.get("invitationLifetimeRevision") ?? 0) + 1;
+        tx.set(accessRef(tenantId), {
+          ...(!before.exists ? { state: "pending", message: null } : {}),
+          invitationTtlHours: body.data.hours,
+          invitationLifetimeRevision: revision,
+        }, { merge: true });
+        tx.create(deps.db.collection(IDENTITY_COLLECTIONS.tenants).doc(tenantId).collection(IDENTITY_COLLECTIONS.audit).doc(), {
+          actorUid: "external-access", action: "invitation_lifetime.changed",
+          beforeInvitationTtlHours: before.get("invitationTtlHours") ?? null,
+          afterInvitationTtlHours: body.data.hours, at: Timestamp.fromDate(now()),
+        });
+        return revision;
+      });
+      if (revision === null) {
+        response.status(404).json({ error: "not_found", message: "Not found." });
+        return;
+      }
+      deps.onChange?.(tenantId);
+      response.json({ tenantId, invitationTtlHours: body.data.hours, revision });
     } catch (error) {
       next(error);
     }
@@ -187,10 +238,17 @@ export function createAccessApi(deps: {
         return;
       }
       const at = Timestamp.fromDate(now());
-      const found = await deps.db.runTransaction(async (tx) => {
+      const result = await deps.db.runTransaction(async (tx) => {
         const [agency, before] = await tx.getAll(agencyRef(tenantId), accessRef(tenantId));
-        if (!agency.exists) return false;
-        tx.set(accessRef(tenantId), { state: body.data.state, message: body.data.message, updatedAt: at });
+        if (!agency.exists) return null;
+        const previous = before.exists ? StoredAccess.safeParse(before.data()) : null;
+        const invitationTtlHours = previous?.success ? (previous.data.invitationTtlHours ?? null) : null;
+        tx.set(accessRef(tenantId), {
+          state: body.data.state,
+          message: body.data.message,
+          invitationTtlHours,
+          updatedAt: at,
+        }, { merge: true });
         // Recorded in the agency's own audit trail, so its administrators can see it.
         tx.create(deps.db.collection(IDENTITY_COLLECTIONS.tenants).doc(tenantId).collection(IDENTITY_COLLECTIONS.audit).doc(), {
           actorUid: "external-access",
@@ -206,14 +264,19 @@ export function createAccessApi(deps: {
           afterAccess: body.data.state,
           at,
         });
-        return true;
+        return { invitationTtlHours };
       });
-      if (!found) {
+      if (!result) {
         response.status(404).json({ error: "not_found", message: "Not found." });
         return;
       }
       deps.onChange?.(tenantId);
-      response.json({ tenantId, state: body.data.state, message: body.data.message });
+      response.json({
+        tenantId,
+        state: body.data.state,
+        message: body.data.message,
+        invitationTtlHours: result.invitationTtlHours,
+      });
     } catch (error) {
       next(error);
     }

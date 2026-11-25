@@ -57,7 +57,7 @@ requests from anyone else never use up the scheduler's admission.
 With open sign-up and no [external access control](external-access.md), nobody vets a new
 agency before it can invite people. Each agency's first 5 invitations a UTC day are
 emailed (`AMS_OPEN_SIGNUP_INVITATION_EMAILS`); later ones are recorded and the inviter is
-told to send the sign-in steps themselves. With external access control, only an active
+shown the invitation link to send themselves. With external access control, only an active
 agency's invitations are emailed. In single-agency deployments every invitation is emailed,
 up to the daily invitation limit.
 

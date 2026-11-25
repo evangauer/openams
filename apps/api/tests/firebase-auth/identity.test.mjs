@@ -3,7 +3,7 @@
 // anywhere but the emulators. All people and agencies here are fictional.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -162,19 +162,25 @@ async function createAgency(person, name) {
     )
   ).membership;
 }
+// The link secret of each invitation created here (no mail is configured, so the API
+// returns it to the inviter), keyed by invitation id.
+const linkTokens = new Map();
 async function invite(person, email, role, status = 201) {
-  return json(
+  const result = await json(
     await call("/identity/invitations", {
       cookie: person.cookie,
       body: { email, role },
     }),
     status,
   );
+  if (result.token) linkTokens.set(result.invitation.id, result.token);
+  return result;
 }
-const accept = (person, invitationId) =>
+/** Accepts from the invitation link (its id and secret), as the join page does. */
+const accept = (person, invitationId, token = linkTokens.get(invitationId)) =>
   call("/identity/invitations/accept", {
     cookie: person.cookie,
-    body: { invitationId },
+    body: { invitationId, ...(token ? { token } : {}) },
   });
 /**
  * Writes a second agency straight into Firestore. The API never creates one (one agency
@@ -408,31 +414,43 @@ test("agencies are isolated from each other", async () => {
 });
 
 test("invitations are bound to the verified email, single use, expiring and revocable", async () => {
-  // No token is issued or stored: the invitation id is not a credential.
+  // Only the hash of the link secret is stored, never the secret.
   const stored = (await db().collection("identity_invitations").doc(people.caseyInvitation).get()).data();
   assert.deepEqual(Object.keys(stored).sort(), [
-    "createdAt", "email", "expiresAt", "invitedBy", "invitedByEmail", "role", "status", "tenantId",
+    "createdAt", "email", "expiresAt", "invitedBy", "invitedByEmail", "role", "status", "tenantId", "tokenHash",
   ]);
+  const caseyToken = linkTokens.get(people.caseyInvitation);
+  assert.match(caseyToken, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(stored.tokenHash, createHash("sha256").update(caseyToken).digest("hex"));
+  assert.ok(!JSON.stringify(stored).includes(caseyToken));
   assert.equal(stored.expiresAt.toMillis() - stored.createdAt.toMillis(), 7 * 86400_000);
 
   const { invitation: managerInvite } = await invite(people.avery, "  Morgan.Manager@Harbor-Test.example ", "manager");
   assert.equal(managerInvite.email, "morgan.manager@harbor-test.example");
   await invite(people.avery, "morgan.manager@harbor-test.example", "member", 409);
 
-  // Someone else (with the id) cannot accept it.
+  // Someone else with only the id gets the same answer as for a missing invitation.
   const intruder = await signIn("intruder.person@elsewhere-test.example");
-  const wrong = await json(await accept(intruder, managerInvite.id), 404);
-  assert.equal(wrong.error, "not_found");
+  const missing = await json(await accept(intruder, "x".repeat(24), "y".repeat(43)), 404);
+  const wrong = await json(await accept(intruder, managerInvite.id, null), 404);
+  assert.deepEqual(wrong, missing);
+  assert.deepEqual(await json(await accept(intruder, managerInvite.id, "y".repeat(43)), 404), missing);
+  // Even with the whole link, a different address can't use it, and isn't told which.
+  const withLink = await json(await accept(intruder, managerInvite.id), 403);
+  assert.equal(withLink.error, "invitation_wrong_email");
+  assert.ok(!JSON.stringify(withLink).includes("morgan"));
   // A member of another agency cannot accept either.
   const blakeTry = await accept(people.blake, managerInvite.id);
-  assert.equal(blakeTry.status, 404);
+  assert.equal(blakeTry.status, 403);
 
   people.morgan = await signIn("morgan.manager@harbor-test.example");
   const me = await json(await call("/identity/me", { cookie: people.morgan.cookie }), 200);
   assert.deepEqual(
-    me.pendingInvitations.map((i) => [i.id, i.role, i.agencyName, i.invitedByEmail]),
-    [[managerInvite.id, "manager", "Harbor Test Agency", "avery.admin@harbor-test.example"]],
+    me.pendingInvitations.map((i) => [i.id, i.role, i.agencyName, i.invitedByEmail, i.linkRequired]),
+    [[managerInvite.id, "manager", "Harbor Test Agency", "avery.admin@harbor-test.example", true]],
   );
+  // Signed in as the invited address, the id alone still isn't enough: it takes the link.
+  assert.deepEqual(await json(await accept(people.morgan, managerInvite.id, null), 404), missing);
   assert.ok(Date.parse(me.pendingInvitations[0].agencyCreatedAt) <= Date.now());
   const accepted = await json(await accept(people.morgan, managerInvite.id), 200);
   assert.equal(accepted.membership.tenantId, people.avery.tenantId);

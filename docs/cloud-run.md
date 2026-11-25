@@ -66,6 +66,7 @@ repository-root `Dockerfile` is a different image, the fictional-data
 | `AMS_STATUS_SERVICE_ACCOUNT` | no | Enables the read-only [status endpoint](instance-status.md) for this service account. Unset or `off`: 404. |
 | `AMS_CLIENT_ADDRESS_DEPTH` | on a public deployment | Where the client address is in `X-Forwarded-For`, counted from the end: `2` behind a Google Cloud external Application Load Balancer, `1` behind one reverse proxy. Unset: all clients share one admission limit; see [limits.md](limits.md#client-admission-limits). |
 | `AMS_INVITATION_DAILY_LIMIT` | no | Invitations per UTC day (default 50). |
+| `AMS_INVITATION_TTL_HOURS` | no | How long a new invitation stays open, in whole hours from 1 to 720 (default 168). Shortening it closes open invitations sooner at once. |
 | `AMS_OPEN_SIGNUP_INVITATION_EMAILS` | no | Open sign-up without external access control: invitations one agency may have emailed per UTC day (default 5). |
 | `AMS_SMTP_URL`, `AMS_MAIL_FROM` | no | Email the invitee when an invitation is created, and send sign-in links in the OpenAMS look, through any SMTP service. Keep the URL in a secret manager: it holds the password. Unset: invitations are only recorded and Firebase sends the sign-in email. |
 | `AMS_SIGN_IN_EMAIL_DAILY_LIMIT` | no | Sign-in emails the deployment sends itself per UTC day (default 2000); past it Firebase sends them. |

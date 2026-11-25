@@ -23,12 +23,6 @@
   color: #45513f !important;
   font-size: 13px !important;
 }
-.agency-hosted-divider {
-  margin: 10px 0 0;
-  font-size: 13px;
-  font-weight: 650;
-  color: #65715d;
-}
 html:is([data-theme="portal"], [data-theme="brand"]) .agency-hosted-form {
   width: 100%;
 }
@@ -233,10 +227,6 @@ html[data-theme] .auth-form .agency-hosted-note {
 html[data-theme] .auth-form > .agency-hosted-note {
   margin-top: 20px;
 }
-html[data-theme] .auth-form .agency-hosted-divider {
-  margin: 8px 0 0;
-  color: var(--color-ink-subtle);
-}
 html[data-theme] .auth-form .agency-login-roles {
   width: 100%;
 }
@@ -407,7 +397,46 @@ html[data-theme="brand"] .agency-signout:hover {
 
 .agency-invite {
   display: grid;
-  gap: 4px;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+}
+.agency-invite-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.agency-invite-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+.agency-invite-step svg {
+  flex: none;
+  margin-top: 2px;
+}
+.agency-team-link {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+}
+.agency-team-link p {
+  margin: 0;
+  font-size: 13px;
+}
+.agency-team-link input {
+  width: 100%;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.agency-team-link > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .agency-invite-note,
 .agency-invite-meta {

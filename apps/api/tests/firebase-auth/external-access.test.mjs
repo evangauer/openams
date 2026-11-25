@@ -70,6 +70,7 @@ before(async () => {
       db,
       signup: "open",
       access: { view: control.access, link: { appOrigin: APP_ORIGIN, url: ACCESS_URL, secret: SECRET } },
+      agencyInvitationTtlHours: control.invitationTtlHours,
       invitationMail: async (message) => {
         if (mailFails) throw new Error("smtp unavailable");
         sentMail.push(message);
@@ -180,7 +181,7 @@ test("only the configured service account can read or set access", async () => {
   assert.equal((await setAccess(id, { state: "free_forever" })).status, 400);
   assert.equal((await setAccess(id, { state: "active", tenantId: "other" })).status, 400);
   assert.equal((await setAccess("agency_doesNotExist0000000000", { state: "active" })).status, 404);
-  assert.deepEqual(await json(await call(`/internal/access/v1/agencies/${id}`, { bearer: "controller" }), 200), { tenantId: id, state: "pending", message: null });
+  assert.deepEqual(await json(await call(`/internal/access/v1/agencies/${id}`, { bearer: "controller" }), 200), { tenantId: id, state: "pending", message: null, invitationTtlHours: null });
 });
 
 test("active, read-only and suspended are enforced on every request", async () => {
@@ -260,6 +261,10 @@ test("an active agency's invitation is emailed, and a failed send is reported as
   assert.equal(sentMail[0].agencyName, "Harbor Test Agency");
   assert.equal(sentMail[0].invitedByEmail, "avery.admin@harbor-test.example");
   assert.equal(sentMail[0].role, "member");
+  // The email carries the link secret, so the response to the inviter doesn't.
+  assert.match(sentMail[0].token, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(sentMail[0].invitationId, emailed.invitation.id);
+  assert.equal(emailed.token, undefined);
   mailFails = true;
   const failed = await json(
     await call("/identity/invitations", { cookie: people.avery.cookie, body: { email: "quinn.viewer@harbor-test.example", role: "viewer" } }),
@@ -267,10 +272,38 @@ test("an active agency's invitation is emailed, and a failed send is reported as
   );
   mailFails = false;
   assert.equal(failed.emailed, false);
+  assert.match(failed.token, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(failed.invitation.status, "pending");
   assert.equal(sentMail.length, 1);
   // Leave the agency as the next test expects to find it.
   await json(await setAccess(people.avery.tenantId, { state: before.state, message: before.message ?? null }), 200);
+});
+
+test("the outside system can set an agency's invitation lifetime, within bounds", async () => {
+  const id = people.avery.tenantId;
+  const before = await json(await call(`/internal/access/v1/agencies/${id}`, { bearer: "controller" }), 200);
+  const setLifetime = (hours, bearer = "controller") => call(`/internal/access/v1/agencies/${id}/invitation-lifetime`, { method: "PUT", body: { hours }, bearer });
+  for (const bad of [0, 721, 1.5, -1, "24", true])
+    assert.equal((await setLifetime(bad)).status, 400, String(bad));
+  // Only the configured service account can set it.
+  assert.equal((await setLifetime(1, "stranger")).status, 404);
+  try {
+    const set = await json(await setLifetime(12), 200);
+    assert.equal(set.invitationTtlHours, 12);
+    // Leaving it out keeps it; null returns it to the deployment's setting.
+    assert.equal((await json(await setAccess(id, { state: before.state, message: before.message }), 200)).invitationTtlHours, 12);
+    const created = await json(
+      await call("/identity/invitations", { cookie: people.avery.cookie, body: { email: "riley.viewer@harbor-test.example", role: "viewer" } }),
+      201,
+    );
+    assert.equal(Date.parse(created.invitation.expiresAt) - Date.parse(created.invitation.createdAt), 12 * 3600_000);
+    assert.equal((await json(await setLifetime(null), 200)).invitationTtlHours, null);
+    const entries = (await db().collection("tenants").doc(id).collection("identity_audit").where("action", "==", "invitation_lifetime.changed").get()).docs.map((d) => d.data());
+    assert.ok(entries.some((e) => e.beforeInvitationTtlHours === null && e.afterInvitationTtlHours === 12));
+    assert.ok(entries.some((e) => e.beforeInvitationTtlHours === 12 && e.afterInvitationTtlHours === null));
+  } finally {
+    await json(await setLifetime(null), 200);
+  }
 });
 
 test("one agency's access never affects another", async () => {
@@ -295,9 +328,11 @@ test("administrators get a signed, short-lived link; others don't", async () => 
   assert.equal(claims.exp - claims.iat, 600);
 
   // A member who isn't an administrator can't get one.
-  const { invitation } = await json(await call("/identity/invitations", { cookie: people.avery.cookie, body: { email: "casey.member@harbor-test.example", role: "member" } }), 201);
+  const created = await json(await call("/identity/invitations", { cookie: people.avery.cookie, body: { email: "casey.member@harbor-test.example", role: "member" } }), 201);
+  // The link secret: from the response when no email went out, otherwise from the email.
+  const token = created.token ?? sentMail.at(-1).token;
   const casey = await signIn("casey.member@harbor-test.example");
-  await json(await call("/identity/invitations/accept", { cookie: casey.cookie, body: { invitationId: invitation.id } }), 200);
+  await json(await call("/identity/invitations/accept", { cookie: casey.cookie, body: { invitationId: created.invitation.id, token } }), 200);
   assert.equal((await call("/identity/access-link", { cookie: casey.cookie, body: {} })).status, 403);
 });
 

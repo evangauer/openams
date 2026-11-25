@@ -19,20 +19,31 @@ const message = {
   invitedByEmail: "avery@harbor-test.example",
   role: "member",
   expiresAt: new Date("2026-12-01T12:00:00Z"),
+  invitationId: "AbCdEfGhIjKlMnOpQrStUvWx",
+  token: "s".repeat(43),
 };
+const LINK = `https://ams.fixture.example/join#i=AbCdEfGhIjKlMnOpQrStUvWx&t=${"s".repeat(43)}`;
 
-test("the invitation names the agency, inviter, role, address and expiry, and carries no token", () => {
+test("the invitation names the agency, inviter, role, address and expiry, and links to its join page", () => {
   const { subject, text, html } = invitationContent(message, "https://ams.fixture.example");
   assert.equal(subject, "You've been invited to join an agency on OpenAMS");
   assert.match(text, /avery@harbor-test\.example invited you to join Harbor Test Agency on OpenAMS as a member\./);
-  assert.match(text, /go to https:\/\/ams\.fixture\.example and sign in with this email address \(morgan@harbor-test\.example\)/);
+  assert.match(text, /open this link and sign in with this email address\n\(morgan@harbor-test\.example\)/);
+  assert.ok(text.split("\n").includes(LINK));
   assert.match(text, /^The invitation is open until December 1, 2026 \(UTC\)\.$/m);
   assert.match(html, />The invitation is open until December 1, 2026 \(UTC\)\.</);
   assert.doesNotMatch(text + html, /2026-12-01/);
   assert.match(html, /<strong[^>]*>Harbor Test Agency<\/strong>/);
-  // Every link is the app's own origin, with no query, token or invitation id.
-  assert.deepEqual(new Set(html.match(/href="[^"]*"/g)), new Set(['href="https://ams.fixture.example"']));
-  assert.doesNotMatch(text + html, /[?&](token|invitation|oobCode)=/i);
+  // Every link is the app's own origin: the logo's home page, and the join page with the
+  // invitation and its secret after "#", which browsers never send to a server.
+  const hrefs = new Set(html.match(/href="[^"]*"/g));
+  assert.ok(hrefs.has(`href="${LINK.replaceAll("&", "&#38;")}"`), [...hrefs].join(" "));
+  for (const href of hrefs) {
+    const url = new URL(href.slice(6, -1).replaceAll("&#38;", "&"));
+    assert.equal(url.origin, "https://ams.fixture.example");
+    assert.equal(url.search, "", "nothing in the query string");
+  }
+  assert.doesNotMatch(text + html, /[?](token|invitation|oobCode|t|i)=/i);
 });
 
 // Each zone gets its own process, because a server's time zone is fixed when it starts.
@@ -146,7 +157,7 @@ test("the configured mailer sends one invitation through SMTP", { timeout: 5000 
   assert.equal(receiver.messages.length, 1);
   assert.match(receiver.messages[0], /Subject: You've been invited to join an agency on OpenAMS/);
   assert.match(receiver.messages[0], /Harbor Test Agency/);
-  assert.doesNotMatch(receiver.messages[0], /[?&](token|invitation|oobCode)=/i);
+  assert.doesNotMatch(receiver.messages[0], /[?](token|invitation|oobCode|t|i)=/i);
 });
 
 test("an SMTP rejection is reported as a failed invitation send", { timeout: 5000 }, async (t) => {

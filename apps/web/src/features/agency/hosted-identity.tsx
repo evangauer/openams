@@ -42,6 +42,7 @@ import {
   identityRequest,
   type IdentityMe,
 } from "./identity-model";
+import { clearJoinLink, hasJoinLink, takeJoinLink, type JoinLink } from "./join-link";
 import {
   CONTINUE_ACCESS_KEY,
   clearSetupSuggestion,
@@ -251,8 +252,13 @@ function NewLink({ email: initial, reason }: { email: string; reason: string }) 
   );
 }
 async function signOutAndReload() {
+  clearJoinLink();
   await hostedSignOut();
   window.location.replace("/");
+}
+/** Where a finished sign-in goes: back to an invitation link waiting in this browser, or home. */
+function afterSignIn() {
+  window.location.replace(hasJoinLink() ? "/join" : "/");
 }
 
 function TextCodeForm({ start, onDone }: {
@@ -294,7 +300,14 @@ function TextCodeForm({ start, onDone }: {
   </>;
 }
 
-function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
+function SignInForm({
+  suggestion,
+  invited = false,
+}: {
+  suggestion: SetupSuggestion | null;
+  /** Opened from an invitation link: say so, and name nothing until sign-in. */
+  invited?: boolean;
+}) {
   const [email, setEmail] = useState(suggestion?.email ?? "");
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [method, setMethod] = useState<"email" | "text" | "add-phone">("email");
@@ -303,7 +316,7 @@ function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState("");
   if (method === "text" && smsEnabled) return <Card title="Sign in by text" lead="Use the mobile number you've linked to your verified email account.">
-    <TextCodeForm start={startTextSignIn} onDone={(next) => { if (next.kind === "done") window.location.replace("/"); }} />
+    <TextCodeForm start={startTextSignIn} onDone={(next) => { if (next.kind === "done") afterSignIn(); }} />
     <button className="agency-button" onClick={() => setMethod("email")}>Use an email link</button>
     <button className="agency-button" onClick={() => setMethod("add-phone")}>Add or change text sign-in</button>
   </Card>;
@@ -320,8 +333,8 @@ function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
     );
   return (
     <Card
-      title={method === "add-phone" ? "Set up text sign-in" : "Sign in to your agency"}
-      lead={method === "add-phone" ? "First, verify your email with a fresh link. Then add, change or remove the mobile number on that same account." : "Enter your work email. We'll email you a link that signs you in, so there's no password to remember."}
+      title={method === "add-phone" ? "Set up text sign-in" : invited ? "You've been invited to OpenAMS" : "Sign in to your agency"}
+      lead={method === "add-phone" ? "First, verify your email with a fresh link. Then add, change or remove the mobile number on that same account." : invited ? "Sign in with the email address your invitation was sent to. We'll email you a link that signs you in, then show the invitation." : "Enter your work email. We'll email you a link that signs you in, so there's no password to remember."}
     >
       <form
         className="agency-hosted-form"
@@ -362,7 +375,7 @@ function SignInForm({ suggestion }: { suggestion: SetupSuggestion | null }) {
         <button className="agency-button" onClick={() => { setMethod("text"); setError(""); }}>Use a text message</button>
         <button className="agency-button" onClick={() => { setMethod(method === "add-phone" ? "email" : "add-phone"); setError(""); }}>{method === "add-phone" ? "Use email sign-in" : "Add or change text sign-in"}</button>
       </div>}
-      <small>Sign in to accept an invitation or check whether agency setup is available.</small>
+      {!invited && <small>Sign in to accept an invitation or check whether agency setup is available.</small>}
     </Card>
   );
 }
@@ -433,7 +446,7 @@ export function FinishSignIn() {
   const [busy, setBusy] = useState(false);
   const advance = useCallback((next: SignInStep) => {
     // Replace, so the one-time link is not left in history.
-    if (next.kind === "done") window.location.replace("/");
+    if (next.kind === "done") afterSignIn();
     else setStep(next);
   }, []);
   const finish = useCallback(async (address: string) => {
@@ -645,7 +658,7 @@ function JoinOrSetUp({
     <Card
       title={
         me.pendingInvitations.length
-          ? "Join your agency"
+          ? "You have an invitation"
           : me.setupAvailable
             ? me.signup === "open"
               ? "Create your agency"
@@ -665,10 +678,15 @@ function JoinOrSetUp({
     >
       {me.pendingInvitations.length > 0 && (
         <div className="agency-login-roles">
-          {!me.setupAvailable && (
+          <p className="agency-invite-note">
+            Only join an agency you recognize. If you weren&apos;t expecting
+            this, ask the person who invited you before you join.
+          </p>
+          {me.pendingInvitations.some((invitation) => !invitation.linkRequired) && (
             <label className="agency-field">
               <span>Your name</span>
               <input
+                autoComplete="name"
                 maxLength={100}
                 value={displayName}
                 placeholder={me.email.split("@")[0]}
@@ -676,37 +694,59 @@ function JoinOrSetUp({
               />
             </label>
           )}
-          <p className="agency-invite-note">
-            Only join an agency you recognize. If you weren&apos;t expecting
-            this, ask the person who invited you before you join.
-          </p>
           {me.pendingInvitations.map((invitation) => (
             <div key={invitation.id} className="agency-invite">
-            <button
-              className="agency-button primary"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  identityRequest("invitations/accept", {
-                    invitationId: invitation.id,
-                    ...(displayName.trim()
-                      ? { displayName: displayName.trim() }
-                      : {}),
-                  }),
-                )
-              }
-            >
-              Join {invitation.agencyName} as {human(invitation.role)}
-              <ArrowRight size={15} />
-            </button>
+              <p className="agency-invite-title">
+                <strong>{invitation.agencyName}</strong> invited you as{" "}
+                {human(invitation.role)}.
+              </p>
               <p className="agency-invite-meta">
                 Invited by {invitation.invitedByEmail ?? "an agency manager"}
                 {invitation.agencyCreatedAt
                   ? ` · agency created ${new Date(invitation.agencyCreatedAt).toLocaleDateString()}`
                   : ""}
+                {` · open until ${new Date(invitation.expiresAt).toLocaleDateString()}`}
               </p>
+              {invitation.linkRequired ? (
+                <p className="agency-invite-step">
+                  <Mail size={15} aria-hidden="true" /> To join, open the link in
+                  your invitation email on this device.
+                </p>
+              ) : (
+                // Sent before invitation links existed: accepted here until it closes.
+                <button
+                  className="agency-button primary"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() =>
+                      identityRequest("invitations/accept", {
+                        invitationId: invitation.id,
+                        ...(displayName.trim()
+                          ? { displayName: displayName.trim() }
+                          : {}),
+                      }),
+                    )
+                  }
+                >
+                  Join {invitation.agencyName} as {human(invitation.role)}
+                  <ArrowRight size={15} />
+                </button>
+              )}
+              <button
+                className="agency-button quiet"
+                disabled={busy}
+                onClick={() => {
+                  if (!window.confirm(`Decline the invitation to ${invitation.agencyName}? You'd need a new invitation to join it later.`)) return;
+                  void run(() =>
+                    identityRequest("invitations/decline", { invitationId: invitation.id }),
+                  );
+                }}
+              >
+                Decline
+              </button>
             </div>
           ))}
+          {error && <p role="alert">{error}</p>}
         </div>
       )}
       {me.setupAvailable && (
@@ -741,11 +781,6 @@ function JoinOrSetUp({
             onChange={(event) => setDisplayName(event.target.value)}
           />
         </label>
-        {me.pendingInvitations.length > 0 && (
-          <h2 className="agency-hosted-divider">
-            {me.signup === "open" ? "Or create a new agency" : "Or set up this agency"}
-          </h2>
-        )}
         <label className="agency-field">
           <span>Agency name</span>
           <input
@@ -784,7 +819,7 @@ function JoinOrSetUp({
           </label>
         )}
         <button
-          className={`agency-button ${me.pendingInvitations.length ? "" : "primary"}`}
+          className="agency-button primary"
           disabled={busy || !name.trim() || Boolean(me.terms && !agreed)}
         >
           {busy ? "Working…" : me.signup === "open" ? "Create agency" : "Set up agency"}
@@ -793,7 +828,7 @@ function JoinOrSetUp({
         {error && <p role="alert">{error}</p>}
       </form>
       )}
-      {!me.setupAvailable && error && <p role="alert">{error}</p>}
+      {!me.setupAvailable && !me.pendingInvitations.length && error && <p role="alert">{error}</p>}
       <button
         className="agency-button quiet"
         onClick={() => void signOutAndReload()}
@@ -801,6 +836,238 @@ function JoinOrSetUp({
         <LogOut size={15} />
         Sign out
       </button>
+    </Card>
+  );
+}
+
+interface InvitationPreview {
+  invitation: {
+    agencyName: string;
+    role: IdentityMe["pendingInvitations"][number]["role"];
+    invitedByEmail: string | null;
+    expiresAt: string;
+  };
+  alreadyMember: boolean;
+}
+type JoinState =
+  | { kind: "loading" }
+  | { kind: "no-link" }
+  | { kind: "signed-out" }
+  | { kind: "ready"; me: IdentityMe; link: JoinLink; preview: InvitationPreview }
+  | { kind: "closed"; title: string; message: string; me: IdentityMe | null; wrongEmail?: boolean }
+  | { kind: "declined" };
+
+/** Why an invitation link can't be used, in words the invitee can act on. */
+function closedInvitation(code: string, message: string): { title: string; message: string; wrongEmail?: boolean } {
+  switch (code) {
+    case "invitation_wrong_email":
+      return {
+        title: "This invitation is for a different email",
+        message: "You're signed in with an address this invitation wasn't sent to. Sign out, then sign in with the address it was sent to.",
+        wrongEmail: true,
+      };
+    case "invitation_expired":
+      return { title: "This invitation has expired", message: "Ask the person who invited you to send a new one." };
+    case "invitation_not_pending":
+      return { title: "This invitation can't be used again", message: "It was already accepted, declined or revoked. If you still need access, ask for a new invitation." };
+    case "invitation_withdrawn":
+      return { title: "This invitation is no longer valid", message: "Ask the agency to invite you again." };
+    case "not_found":
+      return { title: "This invitation link doesn't work", message: "Open the link exactly as it arrived in your invitation email, or ask for a new invitation." };
+    default:
+      return { title: "This invitation couldn't be opened", message };
+  }
+}
+
+/**
+ * The invitation link's page (/join#i=…&t=…). Before sign-in it names nothing. After
+ * sign-in the server checks the link and the address; this page only ever offers to
+ * join that one agency, or decline. It never offers to create an agency.
+ */
+export function HostedJoin() {
+  const [state, setState] = useState<JoinState>({ kind: "loading" });
+  const [displayName, setDisplayName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    const link = takeJoinLink();
+    if (!link) {
+      setState({ kind: "no-link" });
+      return;
+    }
+    (async () => {
+      let me: IdentityMe;
+      try {
+        me = await identityRequest<IdentityMe>("me");
+      } catch (failure) {
+        if ((failure as { status?: number }).status === 401) setState({ kind: "signed-out" });
+        else setState({ kind: "closed", ...closedInvitation("", (failure as Error).message || "Unable to reach OpenAMS."), me: null });
+        return;
+      }
+      try {
+        const preview = await identityRequest<InvitationPreview>("invitations/preview", link);
+        setState({ kind: "ready", me, link, preview });
+      } catch (failure) {
+        const code = (failure as { code?: string }).code ?? "";
+        // Keep the link only while signing in with another address could still use it.
+        if (code !== "invitation_wrong_email" && code !== "rate_limited") clearJoinLink();
+        setState({ kind: "closed", ...closedInvitation(code, (failure as Error).message), me });
+      }
+    })();
+  }, []);
+  if (!firebaseClientConfigured())
+    return (
+      <Card
+        title="Sign-in isn't configured"
+        lead="This deployment is missing its Firebase web configuration. See .env.example."
+      />
+    );
+  if (state.kind === "loading") return <Opening />;
+  if (state.kind === "signed-out") return <SignInForm suggestion={null} invited />;
+  if (state.kind === "no-link")
+    return (
+      <Card
+        scene="lost"
+        title="Open your invitation link"
+        lead="This page needs the full link from your invitation email. Open it again from the email, or ask for a new invitation."
+      >
+        <a className="agency-button primary" href="/">
+          Go to sign-in <ArrowRight size={15} />
+        </a>
+      </Card>
+    );
+  if (state.kind === "declined")
+    return (
+      <Card title="Invitation declined" lead="You won't be added to that agency. You can close this page.">
+        <a className="agency-button" href="/">
+          Continue <ArrowRight size={15} />
+        </a>
+      </Card>
+    );
+  if (state.kind === "closed")
+    return (
+      <Card
+        scene="lost"
+        title={state.title}
+        lead={
+          <>
+            {state.message}
+            {state.me ? <> Signed in as {state.me.email}.</> : null}
+          </>
+        }
+      >
+        {state.me && !state.wrongEmail && state.me.membership && (
+          <a className="agency-button primary" href="/">
+            Open {state.me.membership.agencyName} <ArrowRight size={15} />
+          </a>
+        )}
+        {state.me && (
+          <button
+            className={`agency-button ${state.wrongEmail ? "primary" : "quiet"}`}
+            onClick={() => {
+              // Signing in again with the right address still needs the link.
+              if (!state.wrongEmail) clearJoinLink();
+              void hostedSignOut().then(() => window.location.replace(state.wrongEmail ? "/join" : "/"));
+            }}
+          >
+            <LogOut size={15} />
+            Sign out
+          </button>
+        )}
+      </Card>
+    );
+  const { me, link, preview } = state;
+  const { invitation } = preview;
+  async function act(path: "invitations/accept" | "invitations/decline", body: object) {
+    setBusy(true);
+    setError("");
+    try {
+      await identityRequest(path, body);
+      clearJoinLink();
+      if (path === "invitations/accept") window.location.replace("/");
+      else setState({ kind: "declined" });
+    } catch (failure) {
+      const code = (failure as { code?: string }).code ?? "";
+      if (code.startsWith("invitation_") || code === "not_found") {
+        clearJoinLink();
+        setState({ kind: "closed", ...closedInvitation(code, (failure as Error).message), me });
+        return;
+      }
+      setError(failure instanceof Error ? failure.message : "The request failed.");
+      setBusy(false);
+    }
+  }
+  if (preview.alreadyMember)
+    return (
+      <Card
+        title="You're already in an agency"
+        lead={`Signed in as ${me.email}, which already belongs to ${me.membership?.agencyName || "an agency"}. A person can belong to one agency here.`}
+      >
+        <a className="agency-button primary" href="/" onClick={() => clearJoinLink()}>
+          Open your agency <ArrowRight size={15} />
+        </a>
+        <button className="agency-button quiet" onClick={() => void signOutAndReload()}>
+          <LogOut size={15} />
+          Sign out
+        </button>
+      </Card>
+    );
+  return (
+    <Card
+      icon={<MailCheck size={22} />}
+      title={`Join ${invitation.agencyName}`}
+      lead={<>Signed in as {me.email}.</>}
+    >
+      <div className="agency-login-roles">
+        <p className="agency-invite-note">
+          Only join an agency you recognize. If you weren&apos;t expecting this,
+          ask the person who invited you before you join.
+        </p>
+        <p className="agency-invite-meta">
+          Invited by {invitation.invitedByEmail ?? "an agency manager"} as{" "}
+          {human(invitation.role)} · open until{" "}
+          {new Date(invitation.expiresAt).toLocaleDateString()}
+        </p>
+        <form
+          className="agency-hosted-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void act("invitations/accept", {
+              ...link,
+              ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+            });
+          }}
+        >
+          <label className="agency-field">
+            <span>Your name</span>
+            <input
+              autoComplete="name"
+              maxLength={100}
+              value={displayName}
+              placeholder={me.email.split("@")[0]}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+          </label>
+          <button className="agency-button primary" disabled={busy}>
+            {busy ? "Joining…" : `Join ${invitation.agencyName} as ${human(invitation.role)}`}
+            <ArrowRight size={15} />
+          </button>
+          {error && <p role="alert">{error}</p>}
+        </form>
+        <button
+          className="agency-button"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(`Decline the invitation to ${invitation.agencyName}? You'd need a new invitation to join it later.`)) return;
+            void act("invitations/decline", link);
+          }}
+        >
+          Decline invitation
+        </button>
+      </div>
     </Card>
   );
 }

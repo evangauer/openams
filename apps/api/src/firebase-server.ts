@@ -177,6 +177,7 @@ app.use(
           }
         : undefined,
     invitationMail: invitationMailFromEnv(process.env, appOrigin ?? undefined),
+    agencyInvitationTtlHours: accessConfig.enabled ? accessControl.invitationTtlHours : undefined,
     signInMail:
       signInMail && appOrigin ? { appOrigin, send: signInMail } : undefined,
   }),

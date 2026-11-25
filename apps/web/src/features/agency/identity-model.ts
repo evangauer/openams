@@ -41,13 +41,15 @@ export interface IdentityMe {
     invitedByEmail: string | null;
     role: IdentityRole;
     expiresAt: string;
+    /** Accepted only from the invitation link; false for invitations sent before links existed. */
+    linkRequired: boolean;
   }[];
 }
 export interface IdentityInvitation {
   id: string;
   email: string;
   role: IdentityRole;
-  status: "pending" | "accepted" | "revoked" | "expired";
+  status: "pending" | "accepted" | "revoked" | "declined" | "expired";
   createdAt: string;
   expiresAt: string;
 }

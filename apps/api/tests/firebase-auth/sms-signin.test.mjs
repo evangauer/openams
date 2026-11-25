@@ -76,7 +76,7 @@ test("email proof and linked text sign-in preserve the account and invitation me
   const me = await call("/identity/me", undefined, cookie);
   assert.equal(me.email, "rowan@harbor-test.example");
   assert.equal(me.pendingInvitations.length, 1);
-  await call("/identity/invitations/accept", { invitationId: invite.invitation.id }, cookie);
+  await call("/identity/invitations/accept", { invitationId: invite.invitation.id, token: invite.token }, cookie);
   const actor = await call("/ams/whoami", undefined, cookie);
   assert.equal(actor.userId, member.localId);
   const ownerActor = await call("/ams/whoami", undefined, ownerCookie);
