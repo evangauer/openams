@@ -269,11 +269,17 @@ export function FormRunner({
       }
       target.focus({ preventScroll: true });
     });
-  /** Deletes a file the client took back from where it was waiting to be sent. */
-  const discard = (sha256: string) =>
+  /**
+   * Deletes a file the client took back from where it was waiting to be sent. Not while
+   * another file is still on its way up: that one has no fingerprint yet and may be this
+   * same file, attached twice. The waiting copy is then left to expire.
+   */
+  const discard = (sha256: string) => {
+    if (draft.uploads.some((upload) => upload.status === "uploading")) return;
     void fetch(`/api/forms/${form.linkId}/files?submission=${draft.id}&sha256=${sha256}`, {
       method: "DELETE",
     }).catch(() => undefined);
+  };
   function addItem(target: AmsFormSection) {
     setItems(target, "add");
     focusOn((node) => {
