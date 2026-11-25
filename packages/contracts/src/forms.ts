@@ -944,10 +944,13 @@ export function amsFormSlug(name: string): string {
       .normalize("NFKD")
       .replace(/[̀-ͯ]/g, "")
       .toLowerCase()
+      // Every run of other characters is now one dash, so there is at most one to trim
+      // at each end, before and after the cut.
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
+      .replace(/^-/, "")
+      .replace(/-$/, "")
       .slice(0, 40)
-      .replace(/-+$/g, "") || "form"
+      .replace(/-$/, "") || "form"
   );
 }
 

@@ -530,7 +530,10 @@ export function mountFormRoutes(
     express.raw({ type: "application/octet-stream", limit: AMS_FORM_UPLOAD_MAX_BYTES }),
     publicHandle(async (request, response) => {
       const client = pageUpload(request);
-      if (!Buffer.isBuffer(request.body))
+      // Held in a name of its own once it is known to be the raw bytes, so nothing below
+      // reads the request body as anything else.
+      const bytes: unknown = request.body;
+      if (!Buffer.isBuffer(bytes))
         throw new AmsError(400, "invalid_file", "This file couldn't be read. Try attaching it again.");
       const { tenantId, form } = await openForm(request.params.link);
       if (!hasUploads(form))
@@ -545,9 +548,9 @@ export function mountFormRoutes(
       } catch {
         throw new AmsError(400, "invalid_file_name", "This file's name couldn't be read. Rename it and try again.");
       }
-      const metadata = uploadMetadata(filename, request.body);
+      const metadata = uploadMetadata(filename, bytes);
       if (
-        !uploadAllowance.has(form.id, request.body.length) ||
+        !uploadAllowance.has(form.id, bytes.length) ||
         !clientShare(uploadsPerClient, request, form.id) ||
         !uploadsPerForm.take(form.id)
       )
@@ -555,14 +558,14 @@ export function mountFormRoutes(
       // Held apart from the agency's documents until the client sends the form.
       await forms.pending.put(
         formPendingKey(tenantId, formSubmissionId(form.id, client), metadata.sha256),
-        request.body,
+        bytes,
         metadata.mediaType,
       );
-      uploadAllowance.add(form.id, request.body.length);
+      uploadAllowance.add(form.id, bytes.length);
       response.status(201).json({
         name: metadata.name,
         mediaType: metadata.mediaType,
-        bytes: request.body.length,
+        bytes: bytes.length,
         sha256: metadata.sha256,
       });
     }),
