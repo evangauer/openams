@@ -14,6 +14,26 @@ import { AmsService } from "./service.js";
 import { calendarDays } from "./task-follow-up.js";
 import { fileOriginalEmail } from "./correspondence.js";
 import type { AmsFiles } from "./files.js";
+import {
+  DEMO_BOOK,
+  DEMO_CARRIERS,
+  DEMO_COVERAGES,
+  demoPolicyNumber,
+  type DemoOwner,
+} from "./demo-book.js";
+
+type DemoCreate = (
+  key: string,
+  kind: AmsCommand["kind"],
+  data: Record<string, unknown>,
+) => Promise<AmsRecord>;
+type DemoRun = (
+  key: string,
+  kind: AmsCommand["kind"],
+  action: AmsCommand["action"],
+  data: Record<string, unknown>,
+  record?: AmsRecord,
+) => Promise<{ records: AmsRecord[] }>;
 
 const DemoInfo = z
   .object({
@@ -46,9 +66,7 @@ export const DemoStartInput = z
   })
   .strict();
 export function localDemoToken(token: string) {
-  return createHash("sha256")
-    .update(`openams-demo-v1:${token}`)
-    .digest("hex");
+  return createHash("sha256").update(`openams-demo-v1:${token}`).digest("hex");
 }
 
 /** Only the explicit loopback entrypoint constructs this controller. No cloud/provider access. */
@@ -128,6 +146,164 @@ export class LocalAmsDemo {
     await this.persist({ ...state, info, previous: undefined });
     return info;
   }
+  /**
+   * The rest of the fictional book around the walkthrough account: households and
+   * small businesses, their policies (some with a prior term) and a renewal for every
+   * relationship expiring in the next four months.
+   */
+  private async seedBook(input: {
+    date: string;
+    startedAt: string;
+    create: DemoCreate;
+    run: DemoRun;
+    memberId: (role: DemoOwner) => string;
+  }) {
+    const { date, create, run, memberId } = input;
+    const digits = (key: string) =>
+      BigInt(`0x${createHash("sha256").update(key).digest("hex").slice(0, 15)}`)
+        .toString()
+        .padStart(10, "0");
+    const slug = (name: string) =>
+      name
+        .toLowerCase()
+        .replace(/[^a-z]+/g, ".")
+        .replace(/^\.|\.$/g, "");
+    const issue = async (key: string, data: Record<string, unknown>) => {
+      const draft = await create(key, "policies", data);
+      await run(
+        `${key}:issue`,
+        "policies",
+        "policy.issue",
+        {
+          sourceReference: "Fictional declarations page",
+        },
+        draft,
+      );
+      return draft;
+    };
+    for (const entry of DEMO_BOOK) {
+      const domain = entry.email.split("@")[1];
+      const account = await create(`book:${entry.key}`, "accounts", {
+        name: entry.name,
+        ...(entry.legalName ? { legalName: entry.legalName } : {}),
+        type: entry.type,
+        status: entry.status ?? "active",
+        ...(entry.industry ? { industry: entry.industry } : {}),
+        email: entry.email,
+        phone: entry.phone,
+        ...(entry.website ? { website: entry.website } : {}),
+        producerId: memberId(entry.producer),
+        serviceOwnerId: memberId(entry.service),
+        ...(entry.source ? { source: entry.source } : {}),
+        tags: entry.tags ?? [],
+        ...(entry.notes ? { notes: entry.notes } : {}),
+        address: {
+          line1: entry.street,
+          city: entry.city,
+          state: "WI",
+          postalCode: entry.postalCode,
+        },
+      });
+      for (const [index, contact] of entry.contacts.entries())
+        await create(`book:${entry.key}:contact:${index}`, "contacts", {
+          accountId: account.id,
+          name: contact.name,
+          ...(contact.title ? { title: contact.title } : {}),
+          email:
+            index === 0 || entry.type === "business"
+              ? index === 0
+                ? entry.email
+                : `${slug(contact.name.replace(/^Dr\. /, "").split(" ")[0])}@${domain}`
+              : "",
+          phone: index === 0 ? entry.phone : "",
+          primary: index === 0,
+        });
+      for (const [index, exposure] of (entry.exposures ?? []).entries())
+        await create(`book:${entry.key}:exposure:${index}`, "exposures", {
+          accountId: account.id,
+          kind: exposure.kind,
+          name: exposure.name,
+          values: exposure.values,
+        });
+      const renewals = new Map<number, string[]>();
+      for (const [index, policy] of entry.policies.entries()) {
+        const key = `book:${entry.key}:policy:${index}`;
+        const expirationDate = calendarDays(date, policy.expires);
+        const effectiveDate = calendarDays(expirationDate, -365);
+        const common = {
+          accountId: account.id,
+          line: policy.line,
+          billing: policy.billing ?? "direct",
+          commissionBps: Math.round(policy.commission * 100),
+          producerId: memberId(entry.producer),
+          sourceReference: "Fictional declarations page",
+          coverages: DEMO_COVERAGES[policy.line] ?? [],
+        };
+        let previousPolicyId: string | null = null;
+        if (policy.priorPremium) {
+          const carrier = policy.priorCarrier ?? policy.carrier;
+          const prior = await issue(`${key}:prior`, {
+            ...common,
+            number: demoPolicyNumber(
+              carrier,
+              policy.line,
+              digits(`${key}:prior`),
+            ),
+            carrier: DEMO_CARRIERS[carrier],
+            effectiveDate: calendarDays(effectiveDate, -365),
+            expirationDate: effectiveDate,
+            premiumCents: policy.priorPremium * 100,
+          });
+          previousPolicyId = prior.id;
+        }
+        const current = await issue(key, {
+          ...common,
+          number: demoPolicyNumber(
+            policy.carrier,
+            policy.line,
+            digits(
+              previousPolicyId && !policy.priorCarrier ? `${key}:prior` : key,
+            ),
+          ),
+          carrier: DEMO_CARRIERS[policy.carrier],
+          effectiveDate,
+          expirationDate,
+          premiumCents: policy.premium * 100,
+          ...(previousPolicyId ? { previousPolicyId } : {}),
+        });
+        if (policy.expires <= 120)
+          renewals.set(policy.expires, [
+            ...(renewals.get(policy.expires) ?? []),
+            current.id,
+          ]);
+      }
+      for (const [expires, policyIds] of renewals) {
+        const plan = entry.renewal;
+        const stage =
+          plan?.stage ??
+          (expires <= 30 ? "proposal" : expires <= 60 ? "marketing" : "review");
+        const key = `book:${entry.key}:renewal:${expires}`;
+        const renewal = await create(key, "renewals", {
+          accountId: account.id,
+          title: `${entry.name} · ${calendarDays(date, expires).slice(0, 4)} renewal`,
+          policyIds,
+          expirationDate: calendarDays(date, expires),
+          ownerId: memberId(entry.service),
+          nextAction:
+            plan?.nextAction ?? "Review renewal terms with the client",
+          ...(plan?.waitingOn ? { waitingOn: plan.waitingOn } : {}),
+          followUpDate: calendarDays(
+            date,
+            plan?.followUp ?? Math.min(expires - 7, 14),
+          ),
+          ...(plan?.notes ? { notes: plan.notes } : {}),
+        });
+        // New renewals start in review; later stages are a change, as in the app.
+        if (stage !== "review")
+          await run(`${key}:stage`, "renewals", "update", { stage }, renewal);
+      }
+    }
+  }
   private async populate(state: DemoState): Promise<AmsDemoInfo> {
     const { tenantId, startedAt } = state;
     const actor: AmsActor = {
@@ -149,6 +325,8 @@ export class LocalAmsDemo {
         .digest("hex");
       return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
     };
+    const memberId = (role: DemoOwner) =>
+      this.members.find((member) => member.role === role)?.id ?? actor.userId;
     const receipt = (key: string) =>
       this.repository.transact(tenantId, (tx) => tx.receipt(id(key)));
     const run = async (
@@ -305,19 +483,7 @@ export class LocalAmsDemo {
       occurredAt: startedAt,
       body: "Morgan has shared updated payroll for the renewal. Open Correspondence to review the original email and attachment.",
     });
-    await create("second", "accounts", {
-      name: "Northstar Coffee",
-      status: "active",
-      email: "owner@northstar.example.test",
-      producerId: actor.userId,
-      serviceOwnerId: "local_member",
-    });
-    await create("third", "accounts", {
-      name: "Cedar Grove Design",
-      status: "prospect",
-      email: "hello@cedargrove.example.test",
-      producerId: "local_manager",
-    });
+    await this.seedBook({ date, startedAt, create, run, memberId });
     let filed = (await receipt("email"))?.result;
     if (!filed) {
       const bytes = Buffer.from(
