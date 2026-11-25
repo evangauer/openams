@@ -36,6 +36,7 @@ import {
   type AmsFormValue,
   type AmsPublicForm,
 } from "@openams/contracts";
+import { revealInFrame, useEmbedFrame } from "./embed-frame";
 import { inkOn } from "./form-color";
 import { FormQuestion, fileSize, type RunnerUpload } from "./form-inputs";
 import "./form-runner.css";
@@ -138,18 +139,7 @@ export function FormRunner({
     return () => window.clearTimeout(timer);
   }, [draft, storageKey, ready, done]);
   // An embedding page sizes its frame to the form.
-  useEffect(() => {
-    if (!embed || !root.current) return;
-    const report = () =>
-      window.parent?.postMessage(
-        { type: "openams:form-height", height: Math.ceil(root.current!.scrollHeight) },
-        "*",
-      );
-    const observer = new ResizeObserver(report);
-    observer.observe(root.current);
-    report();
-    return () => observer.disconnect();
-  }, [embed]);
+  useEmbedFrame(root, embed);
 
   // The builder's preview shows the section being edited, choosing every line so no
   // section is hidden behind a choice.
@@ -201,16 +191,31 @@ export function FormRunner({
     ),
   ];
 
-  const move = useCallback((next: Partial<Draft>) => {
-    setAttempted(false);
-    setFailure("");
-    setDraft((previous) => ({ ...previous, ...next }));
-    // Wait for the new step to render, then start at its heading.
+  /**
+   * Starts what was just rendered at its top: the heading takes focus, and the page
+   * scrolls there. A framing page that already shows the top of the form is left where
+   * it is, so a visitor's own page doesn't jump on every step.
+   */
+  const toTop = useCallback(() => {
     window.requestAnimationFrame(() => {
+      const form = root.current;
       heading.current?.focus({ preventScroll: true });
-      root.current?.scrollIntoView({ block: "start", behavior: "instant" });
+      if (!form) return;
+      // The builder's preview scrolls its own screen, never the workspace around it.
+      if (preview) form.parentElement?.scrollTo({ top: 0, behavior: "instant" });
+      else if (embed) void revealInFrame(form, { mark: form.firstElementChild ?? form });
+      else form.scrollIntoView({ block: "start", behavior: "instant" });
     });
-  }, []);
+  }, [embed, preview]);
+  const move = useCallback(
+    (next: Partial<Draft>) => {
+      setAttempted(false);
+      setFailure("");
+      setDraft((previous) => ({ ...previous, ...next }));
+      toTop();
+    },
+    [toTop],
+  );
   const setAnswer = (sectionId: string, index: number, fieldId: string, value: AmsFormValue) => {
     setServerIssues((previous) =>
       previous.filter(
@@ -246,6 +251,51 @@ export function FormRunner({
           ),
       };
     });
+
+  /**
+   * Moves focus after a change that leaves it stranded: the button pressed is gone, or
+   * what it made is somewhere else. The page is not scrolled; the change happened where
+   * the client was already looking.
+   */
+  const focusOn = (find: (form: HTMLElement) => HTMLElement | null | undefined) =>
+    window.requestAnimationFrame(() => {
+      const target = root.current && find(root.current);
+      if (!target) return;
+      // A group of questions takes focus for this moment only; a click inside it later
+      // should not land on the group.
+      if (target.tabIndex < 0 && !target.hasAttribute("tabindex")) {
+        target.tabIndex = -1;
+        target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
+      }
+      target.focus({ preventScroll: true });
+    });
+  /** Deletes a file the client took back from where it was waiting to be sent. */
+  const discard = (sha256: string) =>
+    void fetch(`/api/forms/${form.linkId}/files?submission=${draft.id}&sha256=${sha256}`, {
+      method: "DELETE",
+    }).catch(() => undefined);
+  function addItem(target: AmsFormSection) {
+    setItems(target, "add");
+    focusOn((node) => {
+      const all = node.querySelectorAll<HTMLElement>(".hf-item");
+      return all[all.length - 1];
+    });
+  }
+  function removeItem(target: AmsFormSection, index: number) {
+    // Its files go with it, unless the same file is still attached somewhere else.
+    if (!preview) {
+      const here = (upload: RunnerUpload) => upload.section === target.id && upload.item === index;
+      const kept = new Set(draft.uploads.filter((upload) => !here(upload)).map((upload) => upload.sha256));
+      const gone = draft.uploads.filter((upload) => here(upload) && upload.status === "done");
+      for (const sha256 of new Set(gone.map((upload) => upload.sha256))) if (!kept.has(sha256)) discard(sha256);
+    }
+    setItems(target, index);
+    // The one that took its place; after the last one, the button that adds another.
+    focusOn((node) => {
+      const left = node.querySelectorAll<HTMLElement>(".hf-item");
+      return left[index] ?? node.querySelector<HTMLElement>(".hf-add") ?? left[left.length - 1];
+    });
+  }
 
   // Kept in step with the draft, and added to the moment a file is taken, so files
   // picked on two questions at once still add up to the form's limit.
@@ -323,20 +373,24 @@ export function FormRunner({
       draft.uploads.some((item) => item.key !== key && item.sha256 === upload.sha256)
     )
       return;
-    void fetch(
-      `/api/forms/${form.linkId}/files?submission=${draft.id}&sha256=${upload.sha256}`,
-      { method: "DELETE" },
-    ).catch(() => undefined);
+    discard(upload.sha256);
   }
 
   function focusFirstProblem() {
-    window.requestAnimationFrame(() =>
-      root.current
-        ?.querySelector<HTMLElement>(
-          "[data-invalid] input, [data-invalid] select, [data-invalid] textarea, [data-invalid] button",
-        )
-        ?.focus(),
-    );
+    window.requestAnimationFrame(() => {
+      const control = root.current?.querySelector<HTMLElement>(
+        "[data-invalid] input, [data-invalid] select, [data-invalid] textarea, [data-invalid] button",
+      );
+      if (!control) return;
+      // Focus scrolls to the answer, except from a frame in Safari: there the page is asked.
+      control.focus();
+      if (embed)
+        void revealInFrame(control.closest<HTMLElement>("[data-invalid]") ?? control, {
+          whole: true,
+          above: 16,
+          after: true,
+        });
+    });
   }
   function next() {
     if (!section) return;
@@ -398,11 +452,12 @@ export function FormRunner({
         }
         setKeptFirst(body.error === "already_received");
         setDone(true);
-        window.requestAnimationFrame(() => root.current?.scrollIntoView({ block: "start" }));
+        toTop();
         return;
       }
       if (body.error === "form_closed") {
         setClosed(true);
+        toTop();
         return;
       }
       if (
@@ -653,7 +708,11 @@ export function FormRunner({
       {reviewing ? (
         <button type="button" className="hf-button primary" disabled={sending} onClick={() => void send()}>
           {sending ? <Loader2 size={16} className="hf-spin" aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}
-          {sending ? "Sending…" : "Send my answers"}
+          {/* Both labels hold the button's width, so the row doesn't reflow while sending. */}
+          <span className="hf-swap">
+            <span data-off={sending || undefined}>Send my answers</span>
+            <span data-off={!sending || undefined}>Sending…</span>
+          </span>
         </button>
       ) : (
         <button type="button" className="hf-button primary" onClick={next}>
@@ -782,7 +841,7 @@ export function FormRunner({
           </span>
         </legend>
         {count > section.repeat.min && (
-          <button type="button" className="hf-item-remove" onClick={() => setItems(section, index)}>
+          <button type="button" className="hf-item-remove" onClick={() => removeItem(section, index)}>
             <Trash2 size={14} aria-hidden="true" />
             Remove
           </button>
@@ -802,7 +861,7 @@ export function FormRunner({
         {sectionProblem && <p className="hf-error">{sectionProblem}</p>}
         {items}
         {section.repeat && count < section.repeat.max && (
-          <button type="button" className="hf-add" onClick={() => setItems(section, "add")}>
+          <button type="button" className="hf-add" onClick={() => addItem(section)}>
             <Plus size={16} aria-hidden="true" />
             Add {count ? "another" : /^[aeiou]/i.test(section.repeat.noun) ? "an" : "a"} {section.repeat.noun}
           </button>

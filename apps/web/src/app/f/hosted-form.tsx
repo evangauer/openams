@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Mail, Phone } from "lucide-react";
+import { EmbedFrame } from "@/features/forms/embed-frame";
 import { FormRunner } from "@/features/forms/form-runner";
 import { inkOn } from "@/features/forms/form-color";
 import type { PublicFormView } from "@/lib/server/public-forms";
@@ -22,8 +23,9 @@ export function hostedFormMetadata(view: PublicFormView | null): Metadata {
 }
 
 export function HostedForm({ view, embed }: { view: PublicFormView; embed: boolean }) {
-  // Inside an agency's own page the form sits on that page's background.
-  const frameStyle = embed ? <style>{"html,body{background:transparent}"}</style> : null;
+  // Inside an agency's own page the form sits on that page's background, and does not
+  // scroll on its own while that page sizes the frame to it (features/forms/embed-frame).
+  const frameStyle = embed ? <style>{"html,body{background:transparent}html{overflow-y:hidden}"}</style> : null;
   if (view.status === "unavailable")
     return (
       <div className="hf" data-embed={embed || undefined}>
@@ -37,6 +39,7 @@ export function HostedForm({ view, embed }: { view: PublicFormView; embed: boole
             </p>
           </section>
         </main>
+        {embed && <EmbedFrame />}
       </div>
     );
   if (view.status === "open")
@@ -97,6 +100,7 @@ export function HostedForm({ view, embed }: { view: PublicFormView; embed: boole
           )}
         </section>
       </main>
+      {embed && <EmbedFrame />}
     </div>
   );
 }

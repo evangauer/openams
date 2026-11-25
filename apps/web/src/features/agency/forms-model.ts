@@ -199,8 +199,19 @@ export const formUrl = (origin: string, linkId: string) => `${origin}/f/${linkId
 const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 /**
- * HTML an agency pastes into its website. The frame grows with the form: the page
- * inside reports its height, and only messages from the form's own origin are heard.
+ * HTML an agency pastes into its website: the frame, and the page's half of what the two
+ * say to each other (the form's half is features/forms/embed-frame.tsx).
+ *
+ * - The form reports its height and the frame is sized to it, so the form never scrolls
+ *   inside its frame.
+ * - The form asks to be shown (a new step, an answer that needs fixing) and the page
+ *   scrolls its own window there, below whatever the page keeps clear at its top
+ *   (`scroll-padding-top`, which a site with a fixed header sets). A framed page from
+ *   another site can't do this itself in Safari.
+ *
+ * Only messages from this frame, at the form's own origin, are heard, so two forms on one
+ * page don't answer for each other. A page that keeps the frame and drops the script
+ * still works: the form scrolls inside the frame's fixed height.
  */
 export function embedSnippet(origin: string, linkId: string, title: string): string {
   const url = `${formUrl(origin, linkId)}?embed=1`;
@@ -210,9 +221,15 @@ export function embedSnippet(origin: string, linkId: string, title: string): str
     `  style="width:100%;max-width:760px;height:900px;border:0" loading="lazy"></iframe>`,
     `<script>`,
     `  window.addEventListener("message", function (event) {`,
+    `    var frame = document.getElementById(${JSON.stringify(id)});`,
+    `    var data = event.data || {};`,
+    `    if (!frame || event.source !== frame.contentWindow) return;`,
     `    if (event.origin !== ${JSON.stringify(origin)}) return;`,
-    `    if (!event.data || event.data.type !== "openams:form-height") return;`,
-    `    document.getElementById(${JSON.stringify(id)}).style.height = event.data.height + "px";`,
+    `    if (data.type === "openams:form-height") frame.style.height = Number(data.height) + "px";`,
+    `    if (data.type === "openams:form-show") {`,
+    `      var clear = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;`,
+    `      window.scrollBy(0, frame.getBoundingClientRect().top + Number(data.top) - clear);`,
+    `    }`,
     `  });`,
     `</script>`,
   ].join("\n");

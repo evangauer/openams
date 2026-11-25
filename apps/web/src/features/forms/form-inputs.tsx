@@ -425,6 +425,7 @@ function FileQuestion({
   onRemove: (key: string) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const drop = useRef<HTMLButtonElement>(null);
   const [over, setOver] = useState(false);
   const full = uploads.length >= AMS_FORM_UPLOADS_PER_FIELD;
   return (
@@ -452,7 +453,15 @@ function FileQuestion({
                       : fileSize(upload.bytes)}
                 </small>
               </span>
-              <button type="button" aria-label={`Remove ${upload.name}`} onClick={() => onRemove(upload.key)}>
+              <button
+                type="button"
+                aria-label={`Remove ${upload.name}`}
+                onClick={() => {
+                  onRemove(upload.key);
+                  // The button pressed is gone: focus moves to adding a file, in place.
+                  window.requestAnimationFrame(() => drop.current?.focus({ preventScroll: true }));
+                }}
+              >
                 <X size={15} />
               </button>
             </li>
@@ -461,6 +470,7 @@ function FileQuestion({
       )}
       {!full && (
         <button
+          ref={drop}
           type="button"
           className="hf-drop"
           data-over={over || undefined}

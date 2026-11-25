@@ -80,6 +80,42 @@ Two things the page is careful about:
   simply confirmed. If a first send was saved and the client then changes something and
   sends again, they are told the first answers were kept and the changes were not.
 
+## On an agency's website
+
+The Share step gives HTML to paste where the form should appear: a frame, and a short
+script that is the page's half of two messages. The form's half is
+`apps/web/src/features/forms/embed-frame.tsx`; the snippet is `embedSnippet` in
+`apps/web/src/features/agency/forms-model.ts`.
+
+| The form says | The page's script |
+| --- | --- |
+| `openams:form-height` with `height` | Sizes the frame to the form, so the form never scrolls inside its frame. |
+| `openams:form-show` with `top` | Scrolls its own window to that part of the form: the top of a new step, or an answer that needs fixing. |
+
+- **One form, one frame.** The script hears only its own frame, at the form's own
+  origin. Two forms on one page don't size or scroll each other.
+- **No scrollbar inside the frame.** While the page sizes the frame, the form's document
+  does not scroll. A scrollbar there would take width from the form (on Windows, or a Mac
+  with a mouse), change its height and resize the frame again.
+- **A site that drops the script.** Some site builders keep the frame and remove the
+  script. The form still works: the frame keeps its 900 pixel height and the form scrolls
+  inside it. Which case applies is observed, not configured: after the form reports a
+  height, the frame either becomes that height or it doesn't.
+- **Steps start at their top.** A new step, and the thank-you page, scroll the visitor's
+  window to the top of the form, unless that is already on screen. In Chrome and Firefox
+  the form does this itself. Safari does not let a framed page from another site scroll
+  the page around it, so there the script does it; in Safari without the script, a new
+  step starts wherever the page already is.
+- **A fixed header.** The scroll stops below whatever the page keeps clear at its top:
+  set `scroll-padding-top` on the page's `html` element to the header's height, as such a
+  site usually already does.
+- **The page's own background.** The framed form is transparent outside its cards, and
+  the text there (the agency's name, the step count, the line under the form) is dark.
+  Put the form on a light part of the page.
+
+Checked in Chrome, Firefox and Safari's engine at desktop and phone widths, with page
+zoom from 90% to 150%, a script that starts late and a page that sets a minimum height.
+
 ## Addresses
 
 A form can be reached three ways:

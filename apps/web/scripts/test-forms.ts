@@ -99,6 +99,13 @@ assert.equal(formUrl("https://ams.example.test", "auto-quote-abcdefghjk"), "http
 const snippet = embedSnippet("https://ams.example.test", "auto-quote-abcdefghjk", `Harbor "Fixture" <Agency>`);
 assert.ok(snippet.includes(`src="https://ams.example.test/f/auto-quote-abcdefghjk?embed=1"`));
 assert.ok(snippet.includes(`if (event.origin !== "https://ams.example.test") return;`));
+// Only its own frame is heard, so two forms on a page don't size or scroll each other.
+assert.ok(snippet.includes(`event.source !== frame.contentWindow`));
+// The two things a form asks of the page: its height, and to be shown.
+assert.ok(snippet.includes(`"openams:form-height"`) && snippet.includes(`"openams:form-show"`));
+// What is pasted runs as written: the script parses, and the frame's id is the one it looks up.
+new Function(snippet.slice(snippet.indexOf("<script>") + 8, snippet.indexOf("</script>")));
+assert.equal(snippet.match(/id="([^"]+)"/)![1], snippet.match(/getElementById\("([^"]+)"\)/)![1]);
 assert.ok(!snippet.includes(`"Fixture"`) && !snippet.includes("<Agency>"), "the title is escaped");
 assert.ok(isLoopback("127.0.0.1") && isLoopback("localhost") && !isLoopback("ams.example.test"));
 
