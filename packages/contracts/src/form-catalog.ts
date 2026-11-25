@@ -1632,6 +1632,25 @@ export function amsFormFromCatalog(lineIds: string[]): AmsFormDraft {
     ],
   };
 }
+/** Refresh catalog wording and requirements while retaining agency-written questions. */
+function updateContact(form: AmsFormDraft, lines: AmsFormLine[], sections: AmsFormSection[]) {
+  const contact = sections[0];
+  if (contact?.id !== AMS_FORM_CONTACT_SECTION) return sections;
+  const before = amsFormContactSection(form.lines.map((line) => line.id));
+  const after = amsFormContactSection(lines.map((line) => line.id));
+  const business = AMS_FORM_CONTACT_FIELDS.business;
+  const oldField = before.fields.find((field) => field.id === business);
+  const newField = after.fields.find((field) => field.id === business);
+  const existing = contact.fields.find((field) => field.id === business);
+  let fields = contact.fields;
+  if (existing && oldField && JSON.stringify(existing) === JSON.stringify(oldField)) {
+    fields = fields.flatMap((field) => field.id === business ? (newField ? [newField] : []) : [field]);
+  } else if (!existing && !oldField && newField) {
+    fields = [fields[0], newField, ...fields.slice(1)];
+  }
+  const title = contact.title === before.title ? after.title : contact.title;
+  return [{ ...contact, title, fields }, ...sections.slice(1)];
+}
 /**
  * Adds a catalog line to a form the agency may already have edited: its sections go in
  * before the closing section, and nothing already on the form is reworded.
@@ -1658,28 +1677,15 @@ export function amsFormAddLine(form: AmsFormDraft, lineId: string): AmsFormDraft
     end === -1
       ? [...sections, ...added]
       : [...sections.slice(0, end), ...added, ...sections.slice(end)];
-  if (
-    line.family === "commercial" &&
-    sections[0]?.id === AMS_FORM_CONTACT_SECTION &&
-    !sections[0].fields.some((item) => item.id === AMS_FORM_CONTACT_FIELDS.business)
-  ) {
-    const business = amsFormContactSection(lines.map((item) => item.id)).fields.find(
-      (item) => item.id === AMS_FORM_CONTACT_FIELDS.business,
-    )!;
-    const [name, ...rest] = sections[0].fields;
-    sections[0] = { ...sections[0], fields: [name, business, ...rest] };
-  }
-  return { lines, sections };
+  return { lines, sections: updateContact(form, lines, sections) };
 }
 /** Removes a line and the sections that were asked only for it. */
 export function amsFormRemoveLine(form: AmsFormDraft, lineId: string): AmsFormDraft {
   const lines = form.lines.filter((line) => line.id !== lineId);
-  return {
-    lines,
-    sections: form.sections.flatMap((section) => {
-      if (!section.lines.includes(lineId)) return [section];
-      const remaining = section.lines.filter((id) => id !== lineId);
-      return remaining.length ? [{ ...section, lines: remaining }] : [];
-    }),
-  };
+  const sections = form.sections.flatMap((section) => {
+    if (!section.lines.includes(lineId)) return [section];
+    const remaining = section.lines.filter((id) => id !== lineId);
+    return remaining.length ? [{ ...section, lines: remaining }] : [];
+  });
+  return { lines, sections: updateContact(form, lines, sections) };
 }

@@ -155,6 +155,15 @@ async function published(api, form = autoForm()) {
   return result.body.records[0];
 }
 
+test("changing lines updates catalog contact defaults and retains agency wording", () => {
+  const commercial = amsFormFromCatalog(["general_liability"]);
+  const mixed = amsFormAddLine(commercial, "auto");
+  assert.deepEqual(mixed.sections[0], amsFormFromCatalog(["general_liability", "auto"]).sections[0]);
+  assert.deepEqual(amsFormRemoveLine(mixed, "general_liability").sections[0], amsFormFromCatalog(["auto"]).sections[0]);
+  commercial.sections[0].fields.find((field) => field.label === "Business name").label = "Registered entity";
+  assert.ok(amsFormAddLine(commercial, "auto").sections[0].fields.some((field) => field.label === "Registered entity"));
+});
+
 test("the catalog builds a valid form for every line, alone and together", () => {
   const sectionIds = new Set();
   for (const line of AMS_FORM_CATALOG)
