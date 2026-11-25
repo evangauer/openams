@@ -1,8 +1,8 @@
 "use client";
 // Team management. Hosted agencies (AMS_AUTH_MODE=firebase) invite people, change roles
-// and deactivate members through /api/identity. OpenAMS has no outbound email provider
-// yet, so inviting someone records the invitation and the inviter tells the person;
-// nothing is emailed. Local evaluation has fixed test identities instead.
+// and deactivate members through /api/identity. An invitation is emailed when the
+// deployment sends mail; otherwise the inviter is shown its link once, to send
+// themselves. Local evaluation has fixed test identities instead.
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   KeyRound,
   ClipboardCopy,
   Plus,
+  RefreshCw,
   ShieldCheck,
   UserMinus,
   UserPlus,
@@ -26,7 +27,7 @@ import {
 } from "./identity-model";
 import { PageHeader } from "./page-header";
 import { ROLE_GUIDE } from "./roles";
-import { invitationMessage } from "./team-suggestions-model";
+import { invitationLink, invitationMessage } from "./team-suggestions-model";
 import "./team-suggestions.css";
 
 const initials = (name: string) =>
@@ -85,7 +86,10 @@ export function TeamManagement({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // A link the server just issued because no email went out. Shown once: only its hash
+  // is stored, so it can't be shown again (Resend issues a new one).
+  const [fresh, setFresh] = useState<{ invite: IdentityInvitation; link: string } | null>(null);
   const load = useCallback(async () => {
     const [team, invites] = await Promise.all([
       identityRequest<{ members: (AmsMember & { secondFactor?: boolean })[] }>("members"),
@@ -114,17 +118,36 @@ export function TeamManagement({
       setBusy(false);
     }
   }
-  async function copy(invite: IdentityInvitation) {
+  /** What to say after an invitation is created or resent, and the link if none was emailed. */
+  function issued(
+    result: { invitation: IdentityInvitation; emailed?: boolean; token?: string },
+    verb: "created" | "resent",
+  ) {
+    const address = result.invitation.email;
+    if (result.emailed === true) {
+      setFresh(null);
+      return verb === "created"
+        ? `Invitation emailed to ${address}. They join from the link in that email.`
+        : `A new invitation link was emailed to ${address}. The earlier link no longer works.`;
+    }
+    if (result.token) {
+      setCopied(false);
+      setFresh({
+        invite: result.invitation,
+        link: invitationLink(window.location.origin, result.invitation.id, result.token),
+      });
+    }
+    return `No email was sent to ${address}. Use “Copy invitation” and send it to them yourself.`;
+  }
+  async function copy() {
+    if (!fresh) return;
     try {
       await navigator.clipboard.writeText(
-        invitationMessage(invite, session.workspaceName, window.location.origin),
+        invitationMessage(fresh.invite, session.workspaceName, fresh.link),
       );
-      setCopied(invite.id);
-      setNotice(
-        `Sign-in steps for ${invite.email} copied, ready for you to send.`,
-      );
+      setCopied(true);
     } catch {
-      setError("Your browser did not allow copying. Select and copy the steps by hand.");
+      setError("Your browser did not allow copying. Select and copy the link by hand.");
     }
   }
   const canManage = (member: AmsMember) =>
@@ -141,14 +164,13 @@ export function TeamManagement({
             event.preventDefault();
             const address = email.trim().toLowerCase();
             void run(async () => {
-              const result = await identityRequest<{ emailed?: boolean }>(
-                "invitations",
-                { email: address, role },
-              );
+              const result = await identityRequest<{
+                invitation: IdentityInvitation;
+                emailed?: boolean;
+                token?: string;
+              }>("invitations", { email: address, role });
               setEmail("");
-              return result?.emailed === true
-                ? `Invitation emailed to ${address}. They can join by signing in with that address.`
-                : `Invitation recorded for ${address}; no email was sent. Use “Copy sign-in steps” below and send them yourself.`;
+              return issued(result, "created");
             });
           }}
         >
@@ -188,6 +210,25 @@ export function TeamManagement({
           </p>
         </form>
       )}
+      {fresh && (
+        <section className="agency-team-link" aria-live="polite">
+          <h3 className="agency-team-subhead">Invitation link for {fresh.invite.email}</h3>
+          <p>
+            Send this only to {fresh.invite.email}. It works only when they sign in with
+            that address, and it&apos;s shown just this once.
+          </p>
+          <input readOnly value={fresh.link} aria-label="Invitation link" onFocus={(event) => event.target.select()} />
+          <div>
+            <button className="agency-button" onClick={() => void copy()}>
+              {copied ? <Check size={15} /> : <ClipboardCopy size={15} />}
+              {copied ? "Copied" : "Copy invitation"}
+            </button>
+            <button className="agency-button quiet" onClick={() => setFresh(null)}>
+              Done
+            </button>
+          </div>
+        </section>
+      )}
       {pending.length > 0 && (
         <section>
           <h3 className="agency-team-subhead">
@@ -210,14 +251,25 @@ export function TeamManagement({
                     })}
                   </small>
                 </span>
-                <button
-                  className="agency-button quiet"
-                  disabled={busy}
-                  onClick={() => void copy(invite)}
-                >
-                  {copied === invite.id ? <Check size={15} /> : <ClipboardCopy size={15} />}
-                  Copy sign-in steps
-                </button>
+                {canAssignRole(actorRole, invite.role) && (
+                  <button
+                    className="agency-button quiet"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const result = await identityRequest<{
+                          invitation: IdentityInvitation;
+                          emailed?: boolean;
+                          token?: string;
+                        }>(`invitations/${invite.id}/resend`, {});
+                        return issued(result, "resent");
+                      })
+                    }
+                  >
+                    <RefreshCw size={15} />
+                    Resend
+                  </button>
+                )}
                 {canAssignRole(actorRole, invite.role) && (
                   <button
                     className="agency-button quiet"
@@ -225,6 +277,7 @@ export function TeamManagement({
                     onClick={() =>
                       void run(async () => {
                         await identityRequest(`invitations/${invite.id}/revoke`, {});
+                        if (fresh?.invite.id === invite.id) setFresh(null);
                         return `The invitation for ${invite.email} was revoked.`;
                       })
                     }

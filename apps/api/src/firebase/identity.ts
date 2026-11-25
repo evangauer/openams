@@ -30,7 +30,7 @@ import express, {
   type RequestHandler,
   type Response,
 } from "express";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { BaseAuth, DecodedIdToken } from "firebase-admin/auth";
 import type { AppCheck } from "firebase-admin/app-check";
@@ -49,6 +49,7 @@ import {
 import { AmsError } from "../repository.js";
 import { signAccessToken, type AccessView } from "./external-access.js";
 import type { InvitationMailer } from "./invitation-mail.js";
+import { DEFAULT_INVITATION_TTL_HOURS, MAX_INVITATION_TTL_HOURS } from "./invitation-policy.js";
 import { appSignInLink, FINISH_PATH, type SignInMailer } from "./sign-in-mail.js";
 
 export const IDENTITY_COLLECTIONS = {
@@ -62,7 +63,20 @@ export const IDENTITY_COLLECTIONS = {
 } as const;
 export const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 export const RECENT_SIGN_IN_SECONDS = 5 * 60;
-export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { DEFAULT_INVITATION_TTL_HOURS, MAX_INVITATION_TTL_HOURS };
+const HOUR_MS = 60 * 60 * 1000;
+/**
+ * AMS_INVITATION_TTL_HOURS: how long a new invitation stays open, a whole number of hours
+ * from 1 to 720. Anything else falls back to seven days.
+ */
+export function invitationTtlHoursFromEnv(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.AMS_INVITATION_TTL_HOURS?.trim();
+  if (!raw) return DEFAULT_INVITATION_TTL_HOURS;
+  const parsed = /^\d{1,4}$/.test(raw) ? Number(raw) : NaN;
+  if (parsed >= 1 && parsed <= MAX_INVITATION_TTL_HOURS) return parsed;
+  console.warn("AMS_INVITATION_TTL_HOURS must be a whole number of hours from 1 to 720; using 168.");
+  return DEFAULT_INVITATION_TTL_HOURS;
+}
 export interface IdentityLimits {
   /** Invitations one agency may create per UTC day. */
   invitationsPerAgencyPerDay: number;
@@ -218,8 +232,20 @@ const AgencyBody = z
 const InvitationBody = z
   .object({ email: Email, role: AmsRoleSchema })
   .strict();
+/** The secret part of an invitation link: 32 random bytes, base64url. */
+const InvitationToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const AcceptBody = z
-  .object({ invitationId: InvitationId, displayName: DisplayName.optional() })
+  .object({
+    invitationId: InvitationId,
+    token: InvitationToken.optional(),
+    displayName: DisplayName.optional(),
+  })
+  .strict();
+const LinkBody = z
+  .object({ invitationId: InvitationId, token: InvitationToken })
+  .strict();
+const DeclineBody = z
+  .object({ invitationId: InvitationId, token: InvitationToken.optional() })
   .strict();
 const RoleBody = z.object({ role: AmsRoleSchema }).strict();
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -281,7 +307,12 @@ interface InvitationDoc {
   tenantId: string;
   email: string;
   role: AmsRole;
-  status: "pending" | "accepted" | "revoked";
+  status: "pending" | "accepted" | "revoked" | "declined";
+  /**
+   * sha256 (hex) of the secret in the invitation link. The secret itself is never stored.
+   * Invitations created before links existed have none.
+   */
+  tokenHash?: string;
   invitedBy: string;
   /** The inviter's email, shown to the invitee so they can judge the invitation. */
   invitedByEmail?: string;
@@ -494,6 +525,13 @@ export interface IdentityRouterDependencies {
    * built-in email.
    */
   signInMail?: { appOrigin: string; send: SignInMailer };
+  /** How long a new invitation stays open, in hours (default: AMS_INVITATION_TTL_HOURS). */
+  invitationTtlHours?: number;
+  /**
+   * Optional: an agency's own invitation lifetime in hours, set through external access
+   * control. Null means the deployment's setting applies.
+   */
+  agencyInvitationTtlHours?: (tenantId: string) => Promise<number | null>;
 }
 type Locals = { identity: Identity; membership: Membership };
 
@@ -501,16 +539,30 @@ const randomId = (bytes: number) => randomBytes(bytes).toString("base64url");
 const utcDay = (date: Date) => date.toISOString().slice(0, 10);
 const emailName = (email: string) =>
   email.split("@")[0]?.slice(0, 100) || "Agency member";
-function invitationView(id: string, data: InvitationDoc, now: Date) {
-  const expired =
-    data.status === "pending" && data.expiresAt.toMillis() <= now.getTime();
+const newInvitationToken = () => randomBytes(32).toString("base64url");
+/** Compares a presented link secret with the stored hash in constant time. */
+function tokenMatches(token: string | undefined, tokenHash: string | undefined): boolean {
+  if (!token || !tokenHash || !/^[0-9a-f]{64}$/.test(tokenHash)) return false;
+  return timingSafeEqual(Buffer.from(sha(token), "hex"), Buffer.from(tokenHash, "hex"));
+}
+/**
+ * When an invitation stops working: the expiry stored when it was sent, or sooner if the
+ * lifetime that now applies is shorter. Shortening the setting cuts open invitations at
+ * once; lengthening it never extends one already sent.
+ */
+function closesAt(data: InvitationDoc, ttlHours: number): number {
+  return Math.min(data.expiresAt.toMillis(), data.createdAt.toMillis() + ttlHours * HOUR_MS);
+}
+function invitationView(id: string, data: InvitationDoc, now: Date, ttlHours: number) {
+  const closes = closesAt(data, ttlHours);
+  const expired = data.status === "pending" && closes <= now.getTime();
   return {
     id,
     email: data.email,
     role: data.role,
     status: expired ? ("expired" as const) : data.status,
     createdAt: data.createdAt.toDate().toISOString(),
-    expiresAt: data.expiresAt.toDate().toISOString(),
+    expiresAt: new Date(closes).toISOString(),
   };
 }
 
@@ -525,6 +577,24 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
   const requireMfa = deps.requireMfa ?? mfaRequiredFromEnv();
   const allowSms = (deps.allowSms ?? smsSigninFromEnv()) && !requireMfa;
   const terms = deps.terms === undefined ? termsFromEnv() : deps.terms;
+  const deploymentTtlHours = deps.invitationTtlHours ?? invitationTtlHoursFromEnv();
+  /** The invitation lifetime that applies to an agency now, in hours. */
+  async function ttlHoursFor(tenantId: string): Promise<number> {
+    const own = deps.agencyInvitationTtlHours ? await deps.agencyInvitationTtlHours(tenantId) : null;
+    return own !== null && Number.isInteger(own) && own >= 1 && own <= MAX_INVITATION_TTL_HOURS
+      ? own
+      : deploymentTtlHours;
+  }
+  // Link-holding endpoints (preview, accept, decline): a tight per-client admission cap,
+  // and a per-person bucket, so the link secret can't be probed. 256 random bits can't be
+  // guessed anyway; this bounds the cost of trying.
+  const linkAdmission = rateLimit(requestLimitOptions(30));
+  const linkBuckets = new TokenBuckets({ capacity: 20, refillPerSecond: 0.1 });
+  const linkLimited: RequestHandler = (_request, response, next) => {
+    if (linkBuckets.take((response.locals as Locals).identity.uid)) next();
+    else
+      next(new IdentityError(429, "rate_limited", "Too many requests. Wait a minute and try again."));
+  };
   const r = refs(deps.db);
   const audit = (
     tx: Transaction,
@@ -805,6 +875,19 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
     }),
   );
 
+  /** A person's pending invitations that are still open, read outside any transaction. */
+  async function openInvitationsFor(email: string, current: Date) {
+    const docs = (await r.invitations.where("email", "==", email).where("status", "==", "pending").get()).docs;
+    const open = [];
+    for (const doc of docs) {
+      const data = doc.data() as InvitationDoc;
+      if (data.status !== "pending") continue;
+      const closes = closesAt(data, await ttlHoursFor(data.tenantId));
+      if (closes > current.getTime()) open.push({ doc, data, closes });
+    }
+    return open;
+  }
+
   router.get(
     "/identity/me",
     sessionThen,
@@ -815,17 +898,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         ? await r.agency(membership.tenantId).get()
         : null;
       const current = now();
-      const invitations = membership
-        ? []
-        : (
-            await r.invitations.where("email", "==", email).limit(50).get()
-          ).docs
-            .map((doc) => ({ doc, data: doc.data() as InvitationDoc }))
-            .filter(
-              ({ data }) =>
-                data.status === "pending" &&
-                data.expiresAt.toMillis() > current.getTime(),
-            );
+      const invitations = membership ? [] : await openInvitationsFor(email, current);
       const agencies = new Map<string, { name: string; createdAt: string | null }>();
       for (const { data } of invitations)
         if (!agencies.has(data.tenantId)) {
@@ -841,9 +914,11 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         }
       // Open sign-up: anyone without a membership may try (limits apply on create).
       // Otherwise first-run setup: only an install-time administrator, only while this
-      // instance has no agency.
+      // instance has no agency. Someone with an open invitation accepts or declines it
+      // first (POST /identity/agencies refuses too).
       const setupAvailable =
         !membership &&
+        invitations.length === 0 &&
         (signup === "open" ||
           (adminEmails.has(email) && (await r.anyAgency.get()).empty));
       response.json({
@@ -863,13 +938,17 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
               agencyName: String(agency?.get("name") ?? ""),
             }
           : null,
-        pendingInvitations: invitations.map(({ doc, data }) => ({
+        // Shown so the person knows to open their invitation link. The id lets them
+        // decline; accepting takes the secret that only the link carries.
+        pendingInvitations: invitations.map(({ doc, data, closes }) => ({
           id: doc.id,
           agencyName: agencies.get(data.tenantId)?.name ?? "An agency",
           agencyCreatedAt: agencies.get(data.tenantId)?.createdAt ?? null,
           invitedByEmail: data.invitedByEmail ?? null,
           role: data.role,
-          expiresAt: data.expiresAt.toDate().toISOString(),
+          expiresAt: new Date(closes).toISOString(),
+          // Sent before invitation links existed: accepted from this page until it closes.
+          linkRequired: Boolean(data.tokenHash),
         })),
       });
     }),
@@ -919,6 +998,18 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         if (typeof user.get("tenantId") === "string")
           throw new IdentityError(409, "already_member", "You already belong to an agency.");
         if (agency.exists) throw new IdentityError(409, "conflict", "Try again.");
+        // Someone invited to an agency accepts or declines that first. Read in the
+        // transaction, so an invitation arriving at the same moment is seen.
+        const invited = await tx.get(r.invitations.where("email", "==", email).where("status", "==", "pending"));
+        for (const doc of invited.docs) {
+          const data = doc.data() as InvitationDoc;
+          if (data.status === "pending" && closesAt(data, await ttlHoursFor(data.tenantId)) > current.getTime())
+            throw new IdentityError(
+              409,
+              "invitation_pending",
+              "You have an invitation to join an agency. Accept or decline it first.",
+            );
+        }
         const at = Timestamp.fromDate(current);
         if (signup === "open") {
           const [creator, mailboxUsed, day, ...rest] = await tx.getAll(
@@ -1021,8 +1112,50 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
     }),
   );
 
-  // Invitations. No secret token is issued: Firebase email-link sign-in proves the
-  // invitee controls the invited address, and acceptance is bound to that address.
+  // Invitations. Two things are needed to accept one: email-link sign-in as the invited
+  // address (the proof of who you are), and the secret from the invitation link (so an
+  // invitation is accepted only from the link that was sent). Only the secret's hash is
+  // stored. The link carries it after "#", so it never reaches a server log or a Referer.
+  /**
+   * Emails the invitee when mail is configured. With external access control on, only
+   * an active agency sends mail, so an agency that was never approved can't use this
+   * deployment to write to strangers. With open sign-up and no access control, nobody
+   * vets an agency, so only its first few invitations each day are emailed. Returns
+   * whether an email went out.
+   */
+  async function sendInvitation(
+    tenantId: string,
+    invitationId: string,
+    token: string,
+    data: InvitationDoc,
+    invitedToday: number,
+  ): Promise<boolean> {
+    if (!deps.invitationMail) return false;
+    const mayEmail = deps.access
+      ? (await deps.access.view(tenantId))?.state === "active"
+      : signup !== "open" ||
+        invitedToday <= limits.openSignupInvitationEmailsPerAgencyPerDay;
+    if (!mayEmail) return false;
+    try {
+      const agency = await r.agency(tenantId).get();
+      await deps.invitationMail({
+        to: data.email,
+        agencyName: String(agency.get("name") ?? ""),
+        invitedByEmail: data.invitedByEmail ?? "",
+        role: data.role,
+        expiresAt: data.expiresAt.toDate(),
+        invitationId,
+        token,
+      });
+      return true;
+    } catch {
+      // The invitation stands; the inviter is told no email went out. No address or
+      // link is logged.
+      console.error("invitation_mail_failed");
+      return false;
+    }
+  }
+
   router.post(
     "/identity/invitations",
     sessionThen,
@@ -1039,16 +1172,19 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         );
       const current = now();
       const id = randomId(18);
+      const token = newInvitationToken();
+      const ttlHours = await ttlHoursFor(tenantId);
       const dayRef = r.limit(`invitations_${tenantId}_${utcDay(current)}`);
       const data: InvitationDoc = {
         tenantId,
         email: input.email,
         role: input.role,
         status: "pending",
+        tokenHash: sha(token),
         invitedBy: uid,
         invitedByEmail: ownEmail,
         createdAt: Timestamp.fromDate(current),
-        expiresAt: Timestamp.fromMillis(current.getTime() + INVITATION_TTL_MS),
+        expiresAt: Timestamp.fromMillis(current.getTime() + ttlHours * HOUR_MS),
       };
       let invitedToday = 0;
       await deps.db.runTransaction(async (tx) => {
@@ -1078,7 +1214,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
             return (
               invite.tenantId === tenantId &&
               invite.status === "pending" &&
-              invite.expiresAt.toMillis() > current.getTime()
+              closesAt(invite, ttlHours) > current.getTime()
             );
           })
         )
@@ -1105,35 +1241,91 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
           afterRole: input.role,
         });
       });
-      // Email the invitee when mail is configured. With external access control on, only
-      // an active agency sends mail, so an agency that was never approved can't use this
-      // deployment to write to strangers. With open sign-up and no access control, nobody
-      // vets an agency, so only its first few invitations each day are emailed. The
-      // response says what actually happened.
-      let emailed = false;
-      const mayEmail = deps.access
-        ? (await deps.access.view(tenantId))?.state === "active"
-        : signup !== "open" ||
-          invitedToday <= limits.openSignupInvitationEmailsPerAgencyPerDay;
-      if (deps.invitationMail && mayEmail) {
-        try {
-          const agency = await r.agency(tenantId).get();
-          await deps.invitationMail({
-            to: input.email,
-            agencyName: String(agency.get("name") ?? ""),
-            invitedByEmail: ownEmail,
-            role: input.role,
-            expiresAt: data.expiresAt.toDate(),
-          });
-          emailed = true;
-        } catch {
-          // The invitation stands; the inviter is told no email went out. No address is logged.
-          console.error("invitation_mail_failed");
-        }
-      }
-      response
-        .status(201)
-        .json({ invitation: invitationView(id, data, current), emailed });
+      // The response says what actually happened (see sendInvitation).
+      const emailed = await sendInvitation(tenantId, id, token, data, invitedToday);
+      response.status(201).json({
+        invitation: invitationView(id, data, current, ttlHours),
+        emailed,
+        // Only when no email went out, so the inviter can pass the link on themselves.
+        ...(emailed ? {} : { token }),
+      });
+    }),
+  );
+
+  // Resend: a new link secret (the old link stops working) and a fresh lifetime. Counts
+  // toward the agency's daily invitation limit.
+  router.post(
+    "/identity/invitations/:id/resend",
+    sessionThen,
+    requireMember(MANAGERS),
+    route(async (request, response) => {
+      const id = InvitationId.parse(request.params.id);
+      EmptyBody.parse(request.body);
+      const { uid, email: ownEmail } = response.locals.identity;
+      const { tenantId } = response.locals.membership;
+      const current = now();
+      const token = newInvitationToken();
+      const ttlHours = await ttlHoursFor(tenantId);
+      const ref = r.invitations.doc(id);
+      const dayRef = r.limit(`invitations_${tenantId}_${utcDay(current)}`);
+      let invitedToday = 0;
+      const data = await deps.db.runTransaction(async (tx) => {
+        const actor = await actorInTransaction(tx, tenantId, uid);
+        const [snapshot, day] = await tx.getAll(ref, dayRef);
+        const invite = snapshot.data() as InvitationDoc | undefined;
+        if (!invite || invite.tenantId !== tenantId) throw notFound();
+        if (!canAssignRole(actor.role, invite.role))
+          throw new IdentityError(
+            403,
+            "role_not_allowed",
+            "Only an administrator can resend an administrator invitation.",
+          );
+        if (invite.status !== "pending")
+          throw new IdentityError(
+            409,
+            "invitation_not_pending",
+            "This invitation was already used, declined or revoked.",
+          );
+        const count = Number(day.get("count") ?? 0);
+        if (count >= limits.invitationsPerAgencyPerDay)
+          throw new IdentityError(
+            429,
+            "invitation_daily_limit",
+            "Your agency has reached today's invitation limit. Try again tomorrow.",
+          );
+        const at = Timestamp.fromDate(current);
+        const next: InvitationDoc = {
+          ...invite,
+          tokenHash: sha(token),
+          invitedBy: uid,
+          invitedByEmail: ownEmail,
+          createdAt: at,
+          expiresAt: Timestamp.fromMillis(current.getTime() + ttlHours * HOUR_MS),
+        };
+        tx.update(ref, {
+          tokenHash: next.tokenHash,
+          invitedBy: uid,
+          invitedByEmail: ownEmail,
+          createdAt: at,
+          expiresAt: next.expiresAt,
+        });
+        tx.set(dayRef, { count: count + 1, updatedAt: at });
+        invitedToday = count + 1;
+        audit(tx, tenantId, {
+          actorUid: uid,
+          action: "invitation.resent",
+          invitationId: id,
+          email: invite.email,
+          afterRole: invite.role,
+        });
+        return next;
+      });
+      const emailed = await sendInvitation(tenantId, id, token, data, invitedToday);
+      response.json({
+        invitation: invitationView(id, data, current, ttlHours),
+        emailed,
+        ...(emailed ? {} : { token }),
+      });
     }),
   );
 
@@ -1143,14 +1335,16 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
     requireMember(MANAGERS),
     route(async (_request, response) => {
       const current = now();
+      const { tenantId } = response.locals.membership;
+      const ttlHours = await ttlHoursFor(tenantId);
       const snapshot = await r.invitations
-        .where("tenantId", "==", response.locals.membership.tenantId)
+        .where("tenantId", "==", tenantId)
         .limit(500)
         .get();
       response.json({
         invitations: snapshot.docs
           .map((doc) =>
-            invitationView(doc.id, doc.data() as InvitationDoc, current),
+            invitationView(doc.id, doc.data() as InvitationDoc, current, ttlHours),
           )
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       });
@@ -1167,6 +1361,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
       const { uid } = response.locals.identity;
       const { tenantId } = response.locals.membership;
       const current = now();
+      const ttlHours = await ttlHoursFor(tenantId);
       const ref = r.invitations.doc(id);
       const view = await deps.db.runTransaction(async (tx) => {
         const actor = await actorInTransaction(tx, tenantId, uid);
@@ -1184,7 +1379,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
           throw new IdentityError(
             409,
             "invitation_not_pending",
-            "This invitation was already accepted or revoked.",
+            "This invitation was already accepted, declined or revoked.",
           );
         tx.update(ref, {
           status: "revoked",
@@ -1198,40 +1393,118 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
           email: invite.email,
           beforeRole: invite.role,
         });
-        return invitationView(id, { ...invite, status: "revoked" }, current);
+        return invitationView(id, { ...invite, status: "revoked" }, current, ttlHours);
       });
       response.json({ invitation: view });
     }),
   );
 
-  // Accept: only the verified owner of the invited email, with no membership yet.
+  /**
+   * Who may act on an invitation. With a link (every invitation sent since links
+   * existed): the secret must match, then the signed-in email must be the invited one.
+   * A wrong or missing secret looks exactly like a missing invitation. Only someone
+   * holding the real link learns that it was meant for another address, never which.
+   * Without a link (older invitations): the email alone, and a mismatch is a 404 too.
+   */
+  function checkInvitation(
+    invite: InvitationDoc | undefined,
+    token: string | undefined,
+    email: string,
+    legacy: "allow" | "refuse",
+  ): InvitationDoc {
+    if (!invite) throw notFound();
+    if (invite.tokenHash) {
+      if (!tokenMatches(token, invite.tokenHash)) throw notFound();
+      if (invite.email !== email)
+        throw new IdentityError(
+          403,
+          "invitation_wrong_email",
+          "This invitation was sent to a different email address. Sign out, then sign in with the address it was sent to.",
+        );
+      return invite;
+    }
+    if (legacy === "refuse" || invite.email !== email) throw notFound();
+    return invite;
+  }
+  function assertOpen(invite: InvitationDoc, ttlHours: number, current: Date) {
+    if (invite.status !== "pending")
+      throw new IdentityError(
+        409,
+        "invitation_not_pending",
+        "This invitation was already used, declined or revoked.",
+      );
+    if (closesAt(invite, ttlHours) <= current.getTime())
+      throw new IdentityError(
+        410,
+        "invitation_expired",
+        "This invitation has expired. Ask the agency to invite you again.",
+      );
+  }
+  /** The invitation's agency lifetime, read before a transaction (the tenant never changes). */
+  async function ttlForInvitation(id: string): Promise<number> {
+    const tenantId = (await r.invitations.doc(id).get()).get("tenantId");
+    return typeof tenantId === "string" ? ttlHoursFor(tenantId) : deploymentTtlHours;
+  }
+
+  // Preview: what the invitation link is for, after sign-in, changing nothing. Takes the
+  // link secret in the body (never in a URL).
+  router.post(
+    "/identity/invitations/preview",
+    linkAdmission,
+    sessionThen,
+    linkLimited,
+    route(async (request, response) => {
+      const input = LinkBody.parse(request.body);
+      const { uid, email } = response.locals.identity;
+      const current = now();
+      const ttlHours = await ttlForInvitation(input.invitationId);
+      const [snapshot, user] = await deps.db.getAll(r.invitations.doc(input.invitationId), r.user(uid));
+      const invite = checkInvitation(snapshot.data() as InvitationDoc | undefined, input.token, email, "refuse");
+      assertOpen(invite, ttlHours, current);
+      const [agency, inviterDoc] = await deps.db.getAll(
+        r.agency(invite.tenantId),
+        r.member(invite.tenantId, invite.invitedBy),
+      );
+      if (!agency.exists) throw notFound();
+      const inviter = inviterDoc.exists ? memberOf(inviterDoc.data()) : null;
+      if (!inviter || !inviter.active || !canAssignRole(inviter.role, invite.role))
+        throw new IdentityError(
+          410,
+          "invitation_withdrawn",
+          "This invitation is no longer valid. Ask the agency to invite you again.",
+        );
+      response.json({
+        invitation: {
+          agencyName: String(agency.get("name") ?? "An agency"),
+          role: invite.role,
+          invitedByEmail: invite.invitedByEmail ?? null,
+          expiresAt: new Date(closesAt(invite, ttlHours)).toISOString(),
+        },
+        alreadyMember: typeof user.get("tenantId") === "string",
+      });
+    }),
+  );
+
+  // Accept: the invitation link's secret and the verified invited email, no membership yet.
   router.post(
     "/identity/invitations/accept",
+    linkAdmission,
     sessionThen,
+    linkLimited,
     route(async (request, response) => {
       const input = AcceptBody.parse(request.body);
       const { uid, email } = response.locals.identity;
       const current = now();
+      const ttlHours = await ttlForInvitation(input.invitationId);
       const ref = r.invitations.doc(input.invitationId);
       const userRef = r.user(uid);
       const name = input.displayName ?? emailName(email);
+      let withoutLink = false;
       const result = await deps.db.runTransaction(async (tx) => {
         const [snapshot, user] = await tx.getAll(ref, userRef);
-        const invite = snapshot.data() as InvitationDoc | undefined;
-        // A different email gets the same answer as a missing invitation.
-        if (!invite || invite.email !== email) throw notFound();
-        if (invite.status !== "pending")
-          throw new IdentityError(
-            409,
-            "invitation_not_pending",
-            "This invitation was already used or revoked.",
-          );
-        if (invite.expiresAt.toMillis() <= current.getTime())
-          throw new IdentityError(
-            410,
-            "invitation_expired",
-            "This invitation has expired. Ask the agency to invite you again.",
-          );
+        const invite = checkInvitation(snapshot.data() as InvitationDoc | undefined, input.token, email, "allow");
+        withoutLink = !invite.tokenHash;
+        assertOpen(invite, ttlHours, current);
         if (typeof user.get("tenantId") === "string")
           throw new IdentityError(
             409,
@@ -1288,7 +1561,46 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
           agencyName: String(agency.get("name") ?? ""),
         };
       });
+      // Counted so the path for invitations sent before links existed can be removed
+      // once none are left. Nothing identifying is logged.
+      if (withoutLink) console.info("invitation_accepted_without_link");
       response.json({ membership: result });
+    }),
+  );
+
+  // Decline: only the invited person. From the link (secret and email), or from the
+  // signed-in page by email alone, so a lost link never traps anyone. Declining is what
+  // lets someone with an invitation create their own agency instead.
+  router.post(
+    "/identity/invitations/decline",
+    linkAdmission,
+    sessionThen,
+    linkLimited,
+    route(async (request, response) => {
+      const input = DeclineBody.parse(request.body);
+      const { uid, email } = response.locals.identity;
+      const current = now();
+      const ttlHours = await ttlForInvitation(input.invitationId);
+      const ref = r.invitations.doc(input.invitationId);
+      await deps.db.runTransaction(async (tx) => {
+        const found = (await tx.get(ref)).data() as InvitationDoc | undefined;
+        let invite: InvitationDoc;
+        if (input.token) invite = checkInvitation(found, input.token, email, "refuse");
+        else if (found && found.email === email) invite = found;
+        else throw notFound();
+        assertOpen(invite, ttlHours, current);
+        const at = Timestamp.fromDate(current);
+        tx.update(ref, { status: "declined", declinedBy: uid, declinedAt: at });
+        audit(tx, invite.tenantId, {
+          actorUid: uid,
+          action: "invitation.declined",
+          invitationId: input.invitationId,
+          targetUid: uid,
+          email,
+          beforeRole: invite.role,
+        });
+      });
+      response.json({ declined: true });
     }),
   );
 

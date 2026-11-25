@@ -29,8 +29,9 @@ fictional demo). In firebase mode `/api/agency/local-session` and `demo/start` r
    the membership. The tenant always comes from the stored membership.
    With `AMS_REQUIRE_MFA` on, the session is minted only from a sign-in that used a
    second factor, and every request re-checks it (see Two-step sign-in below).
-6. No membership: accept a pending invitation, or create an agency. Who may create one
-   depends on `AMS_SIGNUP`: in `admin` mode (default) only the administrator email named at
+6. No membership: accept an invitation from its link (`/join`), or create an agency.
+   Someone with an open invitation accepts or declines it before they can create one. Who
+   may create one depends on `AMS_SIGNUP`: in `admin` mode (default) only the administrator email named at
    install (`AMS_ADMIN_EMAIL`), once, while the deployment has no agency; in `open` mode
    anyone with a verified email, within the limits below.
 
@@ -45,10 +46,12 @@ Check are injected; the module never calls `initializeApp`.
 | `POST /identity/session` | anyone with a fresh ID token | App Check enforced when an `AppCheck` instance is passed |
 | `POST /identity/sign-in-link` | anyone | `{ sent: true }` when the deployment emailed the link, `{ sent: false }` to use Firebase's email; App Check as above |
 | `POST /identity/sign-out` | session | `revokeRefreshTokens` (signs out every device) |
-| `GET /identity/me` | session | membership, pending invitations for the verified email, and `setupAvailable` |
-| `POST /identity/agencies` | no membership; `admin` mode: `AMS_ADMIN_EMAIL` and no agency yet; `open` mode: anyone within limits | tenant id `agency_` + 24 random URL-safe chars |
-| `GET/POST /identity/invitations`, `POST /identity/invitations/:id/revoke` | admin, manager | |
-| `POST /identity/invitations/accept` | session, no membership | verified email must equal the invited email |
+| `GET /identity/me` | session | membership, open invitations for the verified email (no link secrets), and `setupAvailable` (false while an invitation is open) |
+| `POST /identity/agencies` | no membership and no open invitation; `admin` mode: `AMS_ADMIN_EMAIL` and no agency yet; `open` mode: anyone within limits | tenant id `agency_` + 24 random URL-safe chars; `409 invitation_pending` while an invitation is open |
+| `GET/POST /identity/invitations`, `POST /identity/invitations/:id/revoke\|resend` | admin, manager | creating or resending returns the link secret (`token`) only when no email went out; resending replaces the secret |
+| `POST /identity/invitations/preview` | session | `{ invitationId, token }`: the agency, role, inviter and expiry, changing nothing |
+| `POST /identity/invitations/accept` | session, no membership | `{ invitationId, token }`; the verified email must equal the invited email |
+| `POST /identity/invitations/decline` | session | `{ invitationId, token? }`: only the invited email; without the secret, from the signed-in page |
 | `GET /identity/members` | any active member | |
 | `POST /identity/members/:uid/role\|deactivate\|reactivate` | admin; manager for non-admins | last-admin protection |
 
@@ -57,7 +60,7 @@ Check are injected; the module never calls `initializeApp`.
 - `identity_users/{uid}`: `email`, `tenantId | null`
 - `identity_agencies/{tenantId}`: `name`, `timeZone`, `createdBy`, `createdAt`
 - `identity_agencies/{tenantId}/members/{uid}`: `role`, `name`, `email`, `active`, timestamps
-- `identity_invitations/{id}`: `tenantId`, `email`, `role`, `status`, `invitedBy`, `createdAt`, `expiresAt` (+ accepted/revoked fields)
+- `identity_invitations/{id}`: `tenantId`, `email`, `role`, `status` (`pending`, `accepted`, `declined`, `revoked`), `tokenHash` (sha256 of the link secret), `invitedBy`, `invitedByEmail`, `createdAt`, `expiresAt` (+ accepted/declined/revoked fields)
 - `identity_limits/{instance_agency | invitations_<tenant>_<day>}`: `instance_agency` is
   created with the agency, so a second setup fails even when two requests race
 - `tenants/{tenantId}/identity_audit/{auto}`: actor, action, target, before/after role and active
@@ -70,15 +73,42 @@ Firestore access to these collections; deny them in security rules.
 
 ### Decisions to review
 
-- **No invitation token.** Firebase email-link sign-in proves control of the address,
-  and acceptance requires the verified email to equal the invited one. A bearer token
-  would add a leakable credential without adding proof. The invitation id is random but
-  is not a credential; a wrong email gets the same 404 as a missing invitation.
-- **Invitation email is optional and off by default.** Without mail settings the UI says
-  "Invitation recorded; no email was sent" and the inviter copies the sign-in steps to
-  send themselves. With `AMS_SMTP_URL` and `AMS_MAIL_FROM` set (any SMTP service), the
-  invitee is emailed who invited them, to which agency and role, and where to sign in.
-  The message carries no token and its only link is the app's own address. The agency's
+- **An invitation is accepted from its link, by the invited address.** Firebase email-link
+  sign-in proves control of the address, and acceptance requires the verified email to
+  equal the invited one. That is the proof; the link adds a second condition, so an
+  invitation is accepted only from the link that was sent, on a page that offers nothing
+  but joining that agency or declining. The link is `/join#i=<id>&t=<secret>`:
+  - The secret is 32 random bytes. Only its sha256 is stored, and it is compared in
+    constant time. It is returned to the inviter only when no email went out.
+  - It rides after `#`, which browsers never send to a server, so it stays out of request
+    logs, Referer headers and link scanners' fetches. The page removes it from the address
+    bar at once and keeps it in the browser's storage for at most an hour, for the sign-in
+    round trip (the sign-in email opens a new tab); it is cleared on join, decline or
+    sign-out. `/join` sends `Referrer-Policy: no-referrer`.
+  - A wrong or missing secret gets the same 404 as a missing invitation. Only someone with
+    the real link and a different address is told it was meant for another address, never
+    which. Nothing about the invitation is shown before sign-in.
+  - Preview, accept and decline have a per-client admission limit (30 a minute) and a
+    per-person bucket (20, then one every 10 seconds).
+  - Resending replaces the secret, so the earlier link stops working.
+  - Invitations sent before links existed have no secret. They are still accepted by the
+    invited address alone until they expire, and each such acceptance logs
+    `invitation_accepted_without_link` (nothing identifying) so that path can be removed.
+- **Invitation lifetime.** `AMS_INVITATION_TTL_HOURS` (whole hours, 1 to 720; default 168).
+  With [external access control](external-access.md), the outside system may set an
+  agency's own lifetime. Each invitation stores its expiry when sent; it closes at that
+  time or at `createdAt` plus the lifetime that applies now, whichever is earlier. So
+  shortening the lifetime closes open invitations at once, and lengthening it never
+  extends one already sent.
+- **An open invitation comes first.** While someone has an open invitation, `/identity/me`
+  reports `setupAvailable: false` and creating an agency is refused, checked again inside
+  the creating transaction. Declining the invitation lifts it; a lost link never traps
+  anyone, because declining from the signed-in page needs no secret.
+- **Invitation email is optional and off by default.** Without mail settings the inviter is
+  shown the invitation link once, to send themselves (Resend issues a new one). With
+  `AMS_SMTP_URL` and `AMS_MAIL_FROM` set (any SMTP service), the invitee is emailed who
+  invited them, to which agency and role, and the invitation link. Its links are the
+  app's own origin; the link secret is only after `#`, never in a query string. The agency's
   name is cut to one short line with links and markup removed, because the agency
   chose both that name and the recipient. With external access control on, only an
   `active` agency sends mail. If the send fails, the invitation still stands and the

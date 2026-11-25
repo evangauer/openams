@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * account, and answers 404 when access control is off. This route forwards only the
  * bearer token, the agency id and a small JSON body.
  */
-const path = /^v1\/agencies\/[A-Za-z0-9_-]{1,128}$/;
+const path = /^v1\/agencies\/[A-Za-z0-9_-]{1,128}(?:\/invitation-lifetime)?$/;
 const BODY_LIMIT = 4 * 1024;
 
 async function forward(request: Request, context: { params: Promise<{ path: string[] }> }) {

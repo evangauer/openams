@@ -1,7 +1,8 @@
 // Optional invitation email over SMTP. Off unless AMS_SMTP_URL and AMS_MAIL_FROM are set;
-// without them an invitation is only recorded and the inviter passes the sign-in steps on
-// themselves. The message carries no secret: the invitee still proves the address with
-// email-link sign-in, and acceptance is bound to that address.
+// without them an invitation is only recorded and the inviter passes its link on
+// themselves. The link carries the invitation's secret after "#", so it never reaches a
+// server log; the invitee still proves the address with email-link sign-in, and
+// acceptance is bound to that address.
 import nodemailer from "nodemailer";
 import { brandedEmailHtml, escapeHtml } from "./mail-layout.js";
 
@@ -11,6 +12,9 @@ export interface InvitationMessage {
   invitedByEmail: string;
   role: string;
   expiresAt: Date;
+  invitationId: string;
+  /** The link secret. Goes only into the link; never logged. */
+  token: string;
 }
 export type InvitationMailer = (message: InvitationMessage) => Promise<void>;
 
@@ -51,16 +55,30 @@ const EXPIRY_DAY = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+/**
+ * The invitation link: the join page, with the invitation and its secret after "#". The
+ * fragment is never sent to a server, in the request or in a Referer.
+ */
+export function invitationLink(appOrigin: string, invitationId: string, token: string): string {
+  const url = new URL("/join", appOrigin);
+  url.hash = new URLSearchParams({ i: invitationId, t: token }).toString();
+  return url.toString();
+}
+
 /** The subject, text and HTML of an invitation. Exported for tests. */
 export function invitationContent(message: InvitationMessage, appOrigin: string) {
   const agency = mailSafeName(message.agencyName);
   const role = ROLE_LABELS[message.role] ?? "a member";
   const until = `${EXPIRY_DAY.format(message.expiresAt)} (UTC)`;
+  const link = invitationLink(appOrigin, message.invitationId, message.token);
   const lines = [
     `${message.invitedByEmail} invited you to join ${agency} on OpenAMS as ${role}.`,
     "",
-    `To join, go to ${appOrigin} and sign in with this email address (${message.to}).`,
-    "OpenAMS will email you a sign-in link, then show the invitation for you to accept.",
+    "To accept, open this link and sign in with this email address",
+    `(${message.to}):`,
+    link,
+    "",
+    "The link is just for you. Don't forward it.",
     "",
     `The invitation is open until ${until}.`,
     "",
@@ -75,13 +93,15 @@ export function invitationContent(message: InvitationMessage, appOrigin: string)
     heading: "You're invited to OpenAMS",
     paragraphs: [
       `${escapeHtml(message.invitedByEmail)} invited you to join <strong style="color:#16181d;">${escapeHtml(agency)}</strong> on OpenAMS as ${role}.`,
-      `To join, go to <a href="${escapeHtml(appOrigin)}" style="color:#2e5a88;">${escapeHtml(appOrigin)}</a> and sign in with this email address (${escapeHtml(message.to)}). OpenAMS will email you a sign-in link, then show the invitation for you to accept.`,
+      `To accept, choose the button below and sign in with this email address (${escapeHtml(message.to)}).`,
     ],
-    button: { label: "Go to OpenAMS", href: appOrigin },
+    button: { label: "Accept invitation", href: link },
     notes: [
       `The invitation is open until ${until}.`,
+      "The link is just for you. Don't forward it: it works only with your email address, and only once.",
       "Only join an agency you recognize. If you weren't expecting this, ask the person who invited you before you join, or ignore this message.",
     ],
+    showLink: true,
     footer: "OpenAMS · open-source agency management",
   });
   return { subject, text: lines.join("\n"), html };

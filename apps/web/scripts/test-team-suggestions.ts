@@ -14,6 +14,7 @@ import {
   AREA_LABELS,
   OPENAMS_ISSUES_URL,
   STATUS_LABELS,
+  invitationLink,
   invitationMessage,
   shareUrl,
 } from "../src/features/agency/team-suggestions-model";
@@ -51,14 +52,18 @@ assert.ok(!canAssignRole("manager", "admin") && canAssignRole("manager", "member
 assert.ok(!canAssignRole("member", "viewer"), "members do not manage the team");
 
 // Inviting someone never claims OpenAMS sent an email.
+const link = invitationLink("https://agency.example.test", "AbCdEfGhIjKlMnOpQrStUvWx", "a".repeat(43));
+// The secret rides after "#", so it never reaches a server or a Referer.
+assert.equal(link, `https://agency.example.test/join#i=AbCdEfGhIjKlMnOpQrStUvWx&t=${"a".repeat(43)}`);
 const message = invitationMessage(
-  { email: "casey@harbor.example.test", role: "viewer" },
+  { email: "casey@harbor.example.test", role: "viewer", expiresAt: "2026-01-22T12:00:00.000Z" },
   "Harbor Agency",
-  "https://agency.example.test",
+  link,
 );
 assert.match(message, /Harbor Agency/);
 assert.match(message, /casey@harbor\.example\.test/);
 assert.match(message, /as viewer/);
+assert.ok(message.includes(link));
 assert.doesNotMatch(message, /we (have )?(sent|emailed)/i);
 
 // Sharing opens a reviewed, pre-filled issue on the project and nothing else.

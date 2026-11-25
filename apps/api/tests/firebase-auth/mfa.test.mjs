@@ -122,7 +122,7 @@ test("an administrator can reset a member's second factor, but not their own; th
   const riley = { cookie: (await session(await signInWithBoth(ADMIN_EMAIL))).sessionCookie };
   const invited = await json(await call("/identity/invitations", { cookie: riley.cookie, body: { email: "jordan.member@mfa-test.example", role: "member" } }), 201);
   const jordan = await enrolledPerson("jordan.member@mfa-test.example", "+15555550102");
-  await json(await call("/identity/invitations/accept", { cookie: jordan.cookie, body: { invitationId: invited.invitation.id } }), 200);
+  await json(await call("/identity/invitations/accept", { cookie: jordan.cookie, body: { invitationId: invited.invitation.id, token: invited.token } }), 200);
 
   // Managers see who has a second factor set up.
   const { members } = await json(await call("/identity/members", { cookie: riley.cookie }), 200);

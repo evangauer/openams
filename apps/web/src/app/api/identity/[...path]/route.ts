@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const id = "[A-Za-z0-9_-]{1,128}";
 const readPath = /^(me|members|invitations)$/;
 const writePath = new RegExp(
-  `^(agencies|access-link|invitations|invitations/accept|invitations/${id}/revoke|members/${id}/(role|deactivate|reactivate|reset-mfa))$`,
+  `^(agencies|access-link|invitations|invitations/(accept|preview|decline)|invitations/${id}/(revoke|resend)|members/${id}/(role|deactivate|reactivate|reset-mfa))$`,
 );
 async function proxy(
   request: Request,

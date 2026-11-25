@@ -40,6 +40,13 @@ and `GET` on the same path to read it. Only Google-signed ID tokens for
 audience, are accepted; anything else gets 403. With access control off, both answer 404.
 The endpoint never returns records or member details.
 
+Use `PUT /api/internal/access/v1/agencies/{id}/invitation-lifetime` with
+`{ "hours": 168 }` to set the lifetime in whole hours (1 to 720), or send
+`{ "hours": null }` to restore the deployment default. The endpoint uses the
+same authorization and records each change in the agency audit trail. The access
+GET includes `invitationTtlHours`. Shortening the lifetime can close existing
+invitations sooner. Lengthening it never extends invitations already sent.
+
 ## The link
 
 An agency administrator who chooses **Continue**, **Restore access** or **Manage account**

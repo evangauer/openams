@@ -60,6 +60,12 @@ const nextConfig: NextConfig = {
         source: "/sign-in/finish",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      {
+        // Invitation links carry their secret after "#". Browsers never send that part,
+        // but nothing from this page needs a referrer either.
+        source: "/join",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
     ];
   },
 };

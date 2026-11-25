@@ -55,14 +55,27 @@ export function shareUrl(suggestion: Pick<AmsData<"suggestions">, "title" | "det
 }
 
 /** What to send someone you invited. OpenAMS itself sends nothing. */
+/**
+ * The message an inviter sends themselves when no email went out. It carries the
+ * invitation link, which only works together with sign-in as the invited address.
+ */
 export function invitationMessage(
-  invite: Pick<IdentityInvitation, "email" | "role">,
+  invite: Pick<IdentityInvitation, "email" | "role" | "expiresAt">,
   agencyName: string,
-  origin: string,
+  link: string,
 ) {
+  const until = new Date(invite.expiresAt).toLocaleDateString("en-US", { month: "long", day: "numeric" });
   return [
     `You're invited to ${agencyName} on OpenAMS as ${ROLE_GUIDE[invite.role].label.toLowerCase()}.`,
-    `Sign in at ${origin} with ${invite.email}. Your invitation is waiting there for 7 days.`,
+    `Open this link and sign in with ${invite.email}. It's just for you and works until ${until}:`,
+    link,
   ].join("\n");
+}
+
+/** The invitation link (see join-link.ts): the secret goes after "#", never to a server. */
+export function invitationLink(origin: string, invitationId: string, token: string) {
+  const url = new URL("/join", origin);
+  url.hash = new URLSearchParams({ i: invitationId, t: token }).toString();
+  return url.toString();
 }
 
