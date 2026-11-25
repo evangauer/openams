@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Download,
   ExternalLink,
   ImagePlus,
   Loader2,
@@ -26,6 +27,7 @@ import {
   AMS_FORM_CONTACT_SECTION,
   AMS_FORM_FIELD_TYPES,
   amsFormAddLine,
+  amsFormPath,
   amsFormRemoveLine,
   type AmsFormField,
   type AmsFormFieldType,
@@ -777,6 +779,7 @@ export function FormBuilder({
                         <p>For a counter card or a flyer.</p>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="fb-qr" alt="QR code for the form link" src={qrFor(link)} />
+                        <QrDownload link={link} name={amsFormPath(record!.data.linkId!)} />
                       </section>
                       <section>
                         <h3>Add it to your website</h3>
@@ -873,6 +876,64 @@ function qrFor(text: string) {
   qr.addData(text);
   qr.make();
   return qr.createDataURL(5, 8);
+}
+/**
+ * The QR code as a PNG sharp enough to print: about 1,200 pixels across (4 inches at
+ * 300 dots an inch), black on white, with the blank border a scanner needs around it.
+ */
+function qrPng(text: string): Promise<Blob> {
+  const qr = qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  const modules = qr.getModuleCount();
+  const border = 4;
+  const cell = Math.max(4, Math.floor(1200 / (modules + border * 2)));
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = (modules + border * 2) * cell;
+  const context = canvas.getContext("2d");
+  if (!context) return Promise.reject(new Error("This browser could not draw the image."));
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#000000";
+  for (let row = 0; row < modules; row += 1)
+    for (let column = 0; column < modules; column += 1)
+      if (qr.isDark(row, column)) context.fillRect((column + border) * cell, (row + border) * cell, cell, cell);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("This browser could not make the image."))), "image/png"),
+  );
+}
+function QrDownload({ link, name }: { link: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="agency-button"
+        aria-label="Download the QR code"
+        onClick={() => {
+          setFailed(false);
+          qrPng(link)
+            .then((blob) => {
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = `${name}-qr-code.png`;
+              anchor.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            })
+            .catch(() => setFailed(true));
+        }}
+      >
+        <Download size={15} />
+        Download
+      </button>
+      {failed && (
+        <p className="agency-form-error" role="alert">
+          The image could not be made. Try another browser.
+        </p>
+      )}
+    </>
+  );
 }
 
 function SectionEditor({

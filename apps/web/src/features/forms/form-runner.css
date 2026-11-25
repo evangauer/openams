@@ -47,6 +47,10 @@
   background: var(--hf-soft-strong);
   color: var(--hf-ink);
 }
+/* Headings take the form's ink, not the workspace's (the page-wide heading color). */
+.hf :where(h2, h3, h4) {
+  color: inherit;
+}
 
 /* ------------------------------------------------------------------ frame */
 .hf-top {
