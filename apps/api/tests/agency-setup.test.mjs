@@ -60,9 +60,21 @@ async function fixture(t, adapter = "sqlite") {
         : {}),
       ...extra,
     });
-  const list = async (tenantId, kind) =>
-    (await repository.list(tenantId, kind, AmsListSchema.parse({ limit: 100 })))
-      .items;
+  // Every record of a kind, across pages: the demo book holds more than one page.
+  const list = async (tenantId, kind) => {
+    const items = [];
+    let cursor;
+    do {
+      const page = await repository.list(
+        tenantId,
+        kind,
+        AmsListSchema.parse({ limit: 100, ...(cursor ? { cursor } : {}) }),
+      );
+      items.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return items;
+  };
   t.after(async () => {
     repository.close?.();
     await rm(dir, { recursive: true, force: true });

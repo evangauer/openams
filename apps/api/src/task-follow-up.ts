@@ -1,8 +1,4 @@
-import {
-  AmsDate,
-  type AmsRecord,
-  type AmsData,
-} from "@openams/contracts";
+import { AmsDate, type AmsRecord, type AmsData } from "@openams/contracts";
 import { AmsError, digest } from "./repository.js";
 
 export function calendarDays(date: string, days: number): string {

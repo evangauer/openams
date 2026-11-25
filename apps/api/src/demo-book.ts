@@ -14,11 +14,11 @@ export type DemoOwner = "admin" | "manager" | "member" | "accountant";
 
 export const DEMO_CARRIERS = {
   lakeshore: "Lakeshore Mutual",
-  prairie: "Prairie State Insurance",
+  prairie: "Finger Lakes Insurance",
   northwoods: "Northwoods Casualty",
-  badger: "Badger Valley Mutual",
+  badger: "Taconic Mutual",
   summit: "Summit Specialty (E&S)",
-  comp: "Great Lakes Comp Fund",
+  comp: "Adirondack Comp Group",
   riverbend: "Riverbend Indemnity",
 } as const;
 export type DemoCarrier = keyof typeof DEMO_CARRIERS;
@@ -29,8 +29,12 @@ type Coverage = { name: string; limit?: string; deductible?: string };
 export const DEMO_COVERAGES: Record<string, Coverage[]> = {
   "Personal auto": [
     { name: "Bodily injury liability", limit: "$250,000 / $500,000" },
+    { name: "No-fault (PIP)", limit: "$50,000" },
+    {
+      name: "Supplementary uninsured / underinsured (SUM)",
+      limit: "$250,000 / $500,000",
+    },
     { name: "Property damage liability", limit: "$100,000" },
-    { name: "Uninsured motorist", limit: "$250,000 / $500,000" },
     { name: "Collision", deductible: "$500" },
     { name: "Comprehensive", deductible: "$250" },
   ],
@@ -82,12 +86,13 @@ export const DEMO_COVERAGES: Record<string, Coverage[]> = {
     { name: "Damage to rented premises", limit: "$100,000" },
   ],
   "Workers compensation": [
-    { name: "Workers compensation", limit: "Statutory (WI)" },
+    { name: "Workers compensation", limit: "Statutory (NY)" },
     { name: "Employers liability, each accident", limit: "$500,000" },
     { name: "Employers liability, disease each employee", limit: "$500,000" },
   ],
   "Commercial auto": [
     { name: "Combined single limit", limit: "$1,000,000" },
+    { name: "No-fault (PIP)", limit: "$50,000" },
     { name: "Hired and non-owned auto", limit: "$1,000,000" },
     { name: "Collision", deductible: "$1,000" },
     { name: "Comprehensive", deductible: "$500" },
@@ -117,6 +122,10 @@ export const DEMO_COVERAGES: Record<string, Coverage[]> = {
   "Liquor liability": [
     { name: "Each common cause", limit: "$1,000,000" },
     { name: "Aggregate", limit: "$2,000,000" },
+  ],
+  "NY disability & paid family leave": [
+    { name: "Statutory disability (DBL)", limit: "Statutory (NY)" },
+    { name: "Paid family leave (PFL)", limit: "Statutory (NY)" },
   ],
   "Directors & officers": [
     { name: "Each claim", limit: "$1,000,000", deductible: "$1,000" },
@@ -158,6 +167,7 @@ function abbreviation(line: string) {
       Cyber: "CY",
       "Liquor liability": "LL",
       "Directors & officers": "DO",
+      "NY disability & paid family leave": "DBL",
     }[line] ?? "XX"
   );
 }
@@ -239,9 +249,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     legalName: "Lakeview Family Dental, S.C.",
     type: "business",
     industry: "Dental office",
-    city: "Middleton",
-    street: "2210 Parmenter St, Suite 140",
-    postalCode: "53562",
+    city: "Scarsdale",
+    street: "700 White Plains Rd, Suite 210",
+    postalCode: "10583",
     phone: "555-0161",
     email: "office@lakeviewdental.example.test",
     website: "https://lakeviewdental.example.test",
@@ -286,6 +296,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         expires: 38,
       },
       {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 38,
+      },
+      {
         line: "Professional liability",
         carrier: "riverbend",
         premium: 3980,
@@ -309,15 +326,15 @@ export const DEMO_BOOK: DemoAccount[] = [
   },
   {
     key: "midwest-freight",
-    name: "Midwest Freight Partners",
-    legalName: "Midwest Freight Partners Inc.",
+    name: "Hudson Freight Partners",
+    legalName: "Hudson Freight Partners Inc.",
     type: "business",
-    industry: "Regional trucking",
-    city: "Sun Prairie",
-    street: "4400 Commerce Dr",
-    postalCode: "53590",
+    industry: "Regional trucking (NY/NJ/CT)",
+    city: "Elmsford",
+    street: "450 Saw Mill River Rd",
+    postalCode: "10523",
     phone: "555-0162",
-    email: "safety@midwestfreight.example.test",
+    email: "safety@hudsonfreight.example.test",
     producer: "admin",
     service: "manager",
     tags: ["Transportation", "Key account", "Loss sensitive"],
@@ -370,6 +387,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         expires: 24,
       },
       {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 2090,
+        commission: 10,
+        expires: 24,
+      },
+      {
         line: "Commercial umbrella",
         carrier: "summit",
         premium: 24600,
@@ -387,7 +411,7 @@ export const DEMO_BOOK: DemoAccount[] = [
     renewal: {
       stage: "marketing",
       nextAction: "Chase two outstanding auto quotes; incumbent at +22%",
-      waitingOn: "Riverbend and Prairie State auto quotes",
+      waitingOn: "Riverbend and Finger Lakes auto quotes",
       followUp: -2,
       notes:
         "Submitted to 3 markets on loss runs and MVRs. Owner wants options before the 15th.",
@@ -399,9 +423,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     legalName: "Sunrise Bakery LLC",
     type: "business",
     industry: "Bakery / restaurant",
-    city: "Madison",
-    street: "318 Atwood Ave",
-    postalCode: "53704",
+    city: "Tarrytown",
+    street: "38 Main St",
+    postalCode: "10591",
     phone: "555-0163",
     email: "hello@sunrisebakery.example.test",
     producer: "admin",
@@ -431,6 +455,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         expires: 72,
       },
       {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 72,
+      },
+      {
         line: "Liquor liability",
         carrier: "summit",
         premium: 1240,
@@ -451,9 +482,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     legalName: "Ridgeline Roofing & Exteriors LLC",
     type: "business",
     industry: "Roofing contractor",
-    city: "Verona",
-    street: "915 Enterprise Way",
-    postalCode: "53593",
+    city: "Yonkers",
+    street: "1125 Nepperhan Ave",
+    postalCode: "10703",
     phone: "555-0164",
     email: "office@ridgelineroofing.example.test",
     producer: "admin",
@@ -479,17 +510,24 @@ export const DEMO_BOOK: DemoAccount[] = [
       {
         line: "General liability",
         carrier: "summit",
-        premium: 21400,
+        premium: 68400,
         commission: 12,
         expires: 103,
         priorCarrier: "northwoods",
-        priorPremium: 17800,
+        priorPremium: 54900,
       },
       {
         line: "Workers compensation",
         carrier: "comp",
         premium: 58200,
         commission: 5,
+        expires: 103,
+      },
+      {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 2910,
+        commission: 10,
         expires: 103,
       },
       {
@@ -509,7 +547,8 @@ export const DEMO_BOOK: DemoAccount[] = [
     ],
     renewal: {
       stage: "review",
-      nextAction: "Order loss runs; plan WC audit review before remarketing",
+      nextAction:
+        "Order loss runs; remarket GL in E&S (NY Labor Law 240 exposure)",
       followUp: 6,
     },
   },
@@ -519,9 +558,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     legalName: "Oakridge Residential Holdings LLC",
     type: "business",
     industry: "Apartment building owner",
-    city: "Fitchburg",
-    street: "5600 Oakridge Ct",
-    postalCode: "53711",
+    city: "New Rochelle",
+    street: "85 Oakridge Pl",
+    postalCode: "10801",
     phone: "555-0165",
     email: "manager@oakridgeapts.example.test",
     producer: "admin",
@@ -582,9 +621,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Precision Auto Repair",
     type: "business",
     industry: "Auto repair",
-    city: "Madison",
-    street: "2741 E Washington Ave",
-    postalCode: "53704",
+    city: "Port Chester",
+    street: "221 Boston Post Rd",
+    postalCode: "10573",
     phone: "555-0166",
     email: "shop@precisionauto.example.test",
     producer: "manager",
@@ -612,6 +651,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         commission: 8,
         expires: 211,
       },
+      {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 211,
+      },
     ],
   },
   {
@@ -620,9 +666,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     legalName: "Green Thumb Landscape Services Inc.",
     type: "business",
     industry: "Landscaping",
-    city: "Waunakee",
-    street: "600 Industrial Dr",
-    postalCode: "53597",
+    city: "Ossining",
+    street: "14 Croton Ave",
+    postalCode: "10562",
     phone: "555-0167",
     email: "info@greenthumb.example.test",
     producer: "admin",
@@ -664,6 +710,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         expires: 12,
       },
       {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 980,
+        commission: 10,
+        expires: 12,
+      },
+      {
         line: "Inland marine",
         carrier: "northwoods",
         premium: 2750,
@@ -680,14 +733,14 @@ export const DEMO_BOOK: DemoAccount[] = [
   },
   {
     key: "fox-river-hoa",
-    name: "Fox River Townhome Association",
+    name: "Saw Mill Townhome Association",
     type: "business",
     industry: "Homeowners association",
-    city: "Madison",
-    street: "PO Box 4410",
-    postalCode: "53744",
+    city: "Hawthorne",
+    street: "PO Box 318",
+    postalCode: "10532",
     phone: "555-0168",
-    email: "board@foxriverhoa.example.test",
+    email: "board@sawmillhoa.example.test",
     producer: "manager",
     service: "manager",
     tags: ["Real estate", "Nonprofit"],
@@ -724,9 +777,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Bright Path Learning Center",
     type: "business",
     industry: "Child care",
-    city: "Sun Prairie",
-    street: "1450 Main St",
-    postalCode: "53590",
+    city: "Mount Kisco",
+    street: "160 Main St",
+    postalCode: "10549",
     phone: "555-0169",
     email: "director@brightpath.example.test",
     producer: "admin",
@@ -755,6 +808,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         expires: 189,
       },
       {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 189,
+      },
+      {
         line: "Commercial auto",
         carrier: "riverbend",
         premium: 4200,
@@ -765,15 +825,15 @@ export const DEMO_BOOK: DemoAccount[] = [
   },
   {
     key: "capitol-cpa",
-    name: "Capitol Square CPAs",
-    legalName: "Capitol Square Accounting Group, LLP",
+    name: "Westchester Square CPAs",
+    legalName: "Westchester Square Accounting Group, LLP",
     type: "business",
     industry: "Accounting firm",
-    city: "Madison",
-    street: "10 E Main St, Floor 6",
-    postalCode: "53703",
+    city: "White Plains",
+    street: "50 Main St, 9th Floor",
+    postalCode: "10606",
     phone: "555-0170",
-    email: "admin@capitolcpa.example.test",
+    email: "admin@wsqcpa.example.test",
     producer: "admin",
     service: "manager",
     tags: ["Professional services", "Referral partner"],
@@ -810,6 +870,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         commission: 8,
         expires: 58,
       },
+      {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 58,
+      },
     ],
     renewal: {
       stage: "collecting",
@@ -823,9 +890,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Northside Brewing Co.",
     type: "business",
     industry: "Brewery / taproom",
-    city: "Madison",
-    street: "1202 N Sherman Ave",
-    postalCode: "53704",
+    city: "Beacon",
+    street: "422 Main St",
+    postalCode: "12508",
     phone: "555-0171",
     email: "brewers@northside.example.test",
     producer: "admin",
@@ -843,9 +910,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Kessler Electric",
     type: "business",
     industry: "Electrical contractor",
-    city: "Stoughton",
-    street: "88 Commerce Pkwy",
-    postalCode: "53589",
+    city: "Peekskill",
+    street: "9 Lower South St",
+    postalCode: "10566",
     phone: "555-0172",
     email: "jobs@kesslerelectric.example.test",
     producer: "manager",
@@ -861,9 +928,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Stonebridge Veterinary Clinic",
     type: "business",
     industry: "Veterinary clinic",
-    city: "McFarland",
-    street: "5120 Farwell St",
-    postalCode: "53558",
+    city: "Pleasantville",
+    street: "301 Bedford Rd",
+    postalCode: "10570",
     phone: "555-0173",
     email: "frontdesk@stonebridgevet.example.test",
     producer: "admin",
@@ -891,6 +958,13 @@ export const DEMO_BOOK: DemoAccount[] = [
         commission: 8,
         expires: 322,
       },
+      {
+        line: "NY disability & paid family leave",
+        carrier: "comp",
+        premium: 380,
+        commission: 10,
+        expires: 322,
+      },
     ],
   },
   {
@@ -898,9 +972,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "True North IT Services",
     type: "business",
     industry: "Managed IT services",
-    city: "Middleton",
-    street: "8401 Greenway Blvd",
-    postalCode: "53562",
+    city: "Rye Brook",
+    street: "800 Westchester Ave",
+    postalCode: "10573",
     phone: "555-0174",
     email: "ops@truenorthit.example.test",
     producer: "manager",
@@ -940,9 +1014,9 @@ export const DEMO_BOOK: DemoAccount[] = [
     name: "Maple Street Salon",
     type: "business",
     industry: "Salon",
-    city: "Monona",
-    street: "402 Maple St",
-    postalCode: "53716",
+    city: "Larchmont",
+    street: "2085 Palmer Ave",
+    postalCode: "10538",
     phone: "555-0175",
     email: "book@maplesalon.example.test",
     producer: "manager",
@@ -960,14 +1034,14 @@ export const DEMO_BOOK: DemoAccount[] = [
   },
   {
     key: "badger-storage",
-    name: "Badger Self Storage",
+    name: "Tappan Self Storage",
     type: "business",
     industry: "Self storage",
-    city: "DeForest",
-    street: "6900 Hwy 51",
-    postalCode: "53532",
+    city: "Brewster",
+    street: "1540 Route 22",
+    postalCode: "10509",
     phone: "555-0176",
-    email: "manager@badgerstorage.example.test",
+    email: "manager@tappanstorage.example.test",
     producer: "admin",
     service: "manager",
     contacts: [{ name: "Curt Jansen", title: "Owner" }],
@@ -992,9 +1066,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "thompson",
     "Mark & Julie Thompson",
-    "Madison",
-    "4418 Hillcrest Dr",
-    "53705",
+    "Larchmont",
+    "17 Beach Ave",
+    "10538",
     "member",
     [
       {
@@ -1027,7 +1101,7 @@ export const DEMO_BOOK: DemoAccount[] = [
       renewal: {
         stage: "marketing",
         nextAction:
-          "Compare Prairie State and Badger Valley package quotes; call Julie",
+          "Compare Finger Lakes and Taconic Mutual package quotes; call Julie",
         followUp: 0,
       },
       vehicles: [
@@ -1040,9 +1114,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "nguyen",
     "Linh & David Nguyen",
-    "Fitchburg",
-    "2903 Sandstone Ct",
-    "53711",
+    "Eastchester",
+    "42 Mill Rd",
+    "10709",
     "member",
     [
       {
@@ -1072,9 +1146,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "garcia",
     "Maria Garcia",
-    "Madison",
-    "1720 Jenifer St",
-    "53704",
+    "Yonkers",
+    "318 Bronxville Rd",
+    "10708",
     "member",
     [
       {
@@ -1105,9 +1179,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "olsen",
     "Erik & Kari Olsen",
-    "Verona",
-    "702 Prairie Oaks Ln",
-    "53593",
+    "Chappaqua",
+    "9 Hardscrabble Rd",
+    "10514",
     "member",
     [
       {
@@ -1151,9 +1225,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "patel",
     "Raj & Anita Patel",
-    "Middleton",
-    "3109 Bluff Point Rd",
-    "53562",
+    "Scarsdale",
+    "24 Brite Ave",
+    "10583",
     "admin",
     [
       {
@@ -1187,7 +1261,7 @@ export const DEMO_BOOK: DemoAccount[] = [
     ],
     {
       tags: ["Package", "Landlord"],
-      notes: "Owns one rental duplex on Regent St.",
+      notes: "Owns a two-family rental in New Rochelle.",
       renewal: {
         stage: "review",
         nextAction: "Annual review meeting; ask about second rental",
@@ -1199,9 +1273,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "schmidt",
     "Karl Schmidt",
-    "Sun Prairie",
-    "1188 Bird St",
-    "53590",
+    "White Plains",
+    "1 Martine Ave, Apt 1104",
+    "10606",
     "member",
     [
       {
@@ -1231,9 +1305,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "johnson",
     "Tyrone & Kim Johnson",
-    "Madison",
-    "5214 Tolman Ter",
-    "53711",
+    "Mount Vernon",
+    "211 Primrose Ave",
+    "10552",
     "member",
     [
       {
@@ -1256,9 +1330,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "larson",
     "Ben Larson",
-    "Madison",
-    "126 Langdon St, Apt 5",
-    "53703",
+    "Brooklyn",
+    "412 Union St, Apt 3R",
+    "11231",
     "member",
     [
       {
@@ -1288,9 +1362,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "weber",
     "Hans & Greta Weber",
-    "Monona",
-    "6008 Bridge Rd",
-    "53716",
+    "Mamaroneck",
+    "610 Shore Acres Dr",
+    "10543",
     "member",
     [
       {
@@ -1320,9 +1394,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "kim",
     "Grace Kim",
-    "Madison",
-    "15 S Butler St, Unit 902",
-    "53703",
+    "Long Island City",
+    "27-28 Thomson Ave, Apt 1802",
+    "11101",
     "member",
     [
       {
@@ -1345,9 +1419,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "brooks",
     "Daniel & Sarah Brooks",
-    "Waunakee",
-    "410 Woodland Dr",
-    "53597",
+    "Briarcliff Manor",
+    "35 Pine Rd",
+    "10510",
     "member",
     [
       {
@@ -1381,9 +1455,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "andersen",
     "Peter Andersen",
-    "Stoughton",
-    "938 Kensington Dr",
-    "53589",
+    "Yorktown Heights",
+    "1820 Hanover St",
+    "10598",
     "member",
     [
       {
@@ -1406,9 +1480,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "rossi",
     "Anthony & Nicole Rossi",
-    "Middleton",
-    "7302 Elmwood Ave",
-    "53562",
+    "Bronxville",
+    "8 Sagamore Rd",
+    "10708",
     "admin",
     [
       {
@@ -1447,9 +1521,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "miller",
     "Jessica Miller",
-    "Fitchburg",
-    "2655 Fish Hatchery Rd",
-    "53713",
+    "Astoria",
+    "31-14 Ditmars Blvd, Apt 4B",
+    "11105",
     "member",
     [
       {
@@ -1472,9 +1546,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "hansen",
     "Steve & Laura Hansen",
-    "DeForest",
-    "330 Vinburn Rd",
-    "53532",
+    "Cold Spring",
+    "62 Fair St",
+    "10516",
     "member",
     [
       {
@@ -1504,9 +1578,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "baker",
     "Chris Baker",
-    "Madison",
-    "814 Spaight St",
-    "53703",
+    "Hastings-on-Hudson",
+    "114 Warburton Ave",
+    "10706",
     "member",
     [
       {
@@ -1527,9 +1601,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "wright",
     "Ellen Wright",
-    "Monona",
-    "5901 Winnequah Rd",
-    "53716",
+    "Dobbs Ferry",
+    "19 Cedar St",
+    "10522",
     "member",
     [
       {
@@ -1559,9 +1633,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "ali",
     "Omar & Leila Ali",
-    "Madison",
-    "6626 Old Sauk Rd",
-    "53705",
+    "Hartsdale",
+    "77 Old Farm Rd",
+    "10530",
     "member",
     [
       {
@@ -1584,9 +1658,9 @@ export const DEMO_BOOK: DemoAccount[] = [
   household(
     "murphy",
     "Sean Murphy",
-    "Sun Prairie",
-    "2440 Columbus St",
-    "53590",
+    "Pelham",
+    "325 Wolfs Ln",
+    "10803",
     "member",
     [],
     {
@@ -1641,7 +1715,7 @@ function household(
             {
               kind: "location" as const,
               name: "Residence",
-              values: { address: `${street}, ${city}, WI` },
+              values: { address: `${street}, ${city}, NY` },
             },
           ]
         : []),
@@ -1711,7 +1785,7 @@ export const DEMO_WORK: {
       line: "Commercial auto",
       title: "Call Dale with auto remarketing update",
       description:
-        "Incumbent is at +22%. Share where the Riverbend and Prairie State quotes stand and confirm he wants options before the 15th.",
+        "Incumbent is at +22%. Share where the Riverbend and Finger Lakes quotes stand and confirm he wants options before the 15th.",
       owner: "admin",
       due: -2,
       priority: "urgent",
@@ -1748,7 +1822,7 @@ export const DEMO_WORK: {
       account: "northside-brewing",
       title: "Quote Northside Brewing (new business)",
       description:
-        "Collect current dec pages, 3 years of loss runs, sales and liquor receipts. Markets: Prairie State BOP, Summit liquor.",
+        "Collect current dec pages, 3 years of loss runs, sales and liquor receipts. Markets: Finger Lakes BOP, Summit liquor.",
       owner: "admin",
       due: 3,
     },
@@ -1782,7 +1856,7 @@ export const DEMO_WORK: {
     {
       account: "garcia",
       title: "Update Maria's autopay after renewal",
-      description: "Badger Valley moved her to a new billing account.",
+      description: "Taconic Mutual moved her to a new billing account.",
       owner: "member",
       due: 0,
     },
@@ -1819,9 +1893,9 @@ export const DEMO_WORK: {
       line: "General liability",
       type: "certificate",
       title:
-        "Certificate for Westgate Mall reroof (additional insured, waiver)",
+        "Certificate for Ridge Hill retail reroof (additional insured, waiver)",
       description:
-        "Holder: Westgate Properties LLC. Contract requires AI primary/non-contributory and waiver of subrogation.",
+        "Holder: Ridge Hill Retail LLC. Contract requires AI primary/non-contributory and waiver of subrogation.",
       owner: "manager",
       due: 0,
       status: "in_progress",
@@ -1830,8 +1904,8 @@ export const DEMO_WORK: {
       account: "green-thumb",
       line: "General liability",
       type: "certificate",
-      title: "Certificate for City of Waunakee snow removal contract",
-      description: "Holder: City of Waunakee. AI on GL and auto.",
+      title: "Certificate for Village of Ossining snow removal contract",
+      description: "Holder: Village of Ossining. AI on GL and auto.",
       owner: "member",
       due: 1,
     },
@@ -1936,7 +2010,7 @@ export const DEMO_WORK: {
       lossDaysAgo: 19,
       reportedDaysAgo: 18,
       description:
-        "Unit 9 rear-ended a passenger vehicle at a stop light on I-94. Minor injury claimed by the other driver.",
+        "Unit 9 rear-ended a passenger vehicle at a stop light on I-287. Minor injury claimed by the other driver.",
       claimNumber: "NWC-CA-26-55219",
       status: "open",
       adjuster: "R. Ellison (Northwoods Casualty)",

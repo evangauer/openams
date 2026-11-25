@@ -203,7 +203,7 @@ export class LocalAmsDemo {
         address: {
           line1: entry.street,
           city: entry.city,
-          state: "WI",
+          state: "NY",
           postalCode: entry.postalCode,
         },
       });
@@ -384,9 +384,9 @@ export class LocalAmsDemo {
       repository: this.repository,
       members: async () => this.members,
       now: () => new Date(startedAt),
-      timeZone: async () => "America/Chicago",
+      timeZone: async () => "America/New_York",
     });
-    const date = amsCalendarDate(new Date(startedAt), "America/Chicago");
+    const date = amsCalendarDate(new Date(startedAt), "America/New_York");
     const id = (key: string) => {
       const hash = createHash("sha256")
         .update(`${state.commandId}:${key}`)
@@ -427,7 +427,7 @@ export class LocalAmsDemo {
       )!;
     await run("workspace", "workspace", "workspace.configure", {
       name: "Harbor Agency · Demo",
-      timeZone: "America/Chicago",
+      timeZone: "America/New_York",
       email: "hello@harbor.example.test",
       phone: "555-0100",
       billingMode: "direct",
@@ -448,9 +448,9 @@ export class LocalAmsDemo {
       serviceOwnerId: "local_member",
       address: {
         line1: "125 Example Lane",
-        city: "Madison",
-        state: "WI",
-        postalCode: "53703",
+        city: "White Plains",
+        state: "NY",
+        postalCode: "10601",
       },
       notes:
         "Fictional commercial contractor. Review the client's updated payroll before the upcoming renewal.",
@@ -475,7 +475,7 @@ export class LocalAmsDemo {
       kind: "location",
       name: "Main office and workshop",
       values: {
-        address: "125 Example Lane, Madison, WI",
+        address: "125 Example Lane, White Plains, NY",
         squareFeet: 4200,
         construction: "Masonry",
       },
@@ -636,7 +636,7 @@ export function demoChat(members: AmsMember[], now: Date) {
       authorId: manager,
       minutes: 185,
       read: true,
-      body: "Morning, team. Midwest Freight and Lakeview Dental renewals are the priority this week. Both are inside 40 days.",
+      body: "Morning, team. Hudson Freight and Lakeview Dental renewals are the priority this week. Both are inside 40 days.",
     },
     {
       team: true,
@@ -650,7 +650,7 @@ export function demoChat(members: AmsMember[], now: Date) {
       authorId: admin,
       minutes: 95,
       read: true,
-      body: "Can you take the Fox River lender certificates and Harbor & Pine's new project certificate?",
+      body: "Can you take the Saw Mill lender certificates and Harbor & Pine's new project certificate?",
     },
     {
       ...direct(member),
