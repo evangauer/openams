@@ -535,6 +535,9 @@ export function mountFormRoutes(
       const bytes: unknown = request.body;
       if (!Buffer.isBuffer(bytes))
         throw new AmsError(400, "invalid_file", "This file couldn't be read. Try attaching it again.");
+      // Its size, read as a buffer's (as the document upload route does), never as the
+      // length of whatever a request might have put there.
+      const size = Buffer.byteLength(bytes);
       const { tenantId, form } = await openForm(request.params.link);
       if (!hasUploads(form))
         throw new AmsError(
@@ -550,7 +553,7 @@ export function mountFormRoutes(
       }
       const metadata = uploadMetadata(filename, bytes);
       if (
-        !uploadAllowance.has(form.id, bytes.length) ||
+        !uploadAllowance.has(form.id, size) ||
         !clientShare(uploadsPerClient, request, form.id) ||
         !uploadsPerForm.take(form.id)
       )
@@ -561,11 +564,11 @@ export function mountFormRoutes(
         bytes,
         metadata.mediaType,
       );
-      uploadAllowance.add(form.id, bytes.length);
+      uploadAllowance.add(form.id, size);
       response.status(201).json({
         name: metadata.name,
         mediaType: metadata.mediaType,
-        bytes: bytes.length,
+        bytes: size,
         sha256: metadata.sha256,
       });
     }),
