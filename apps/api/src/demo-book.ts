@@ -1655,3 +1655,367 @@ function household(
     ...rest,
   };
 }
+
+/** Open work across the team, as on an ordinary weekday. Days are offsets from today. */
+export const DEMO_WORK: {
+  tasks: {
+    account: string;
+    line?: string;
+    title: string;
+    description: string;
+    owner: DemoOwner;
+    due: number;
+    priority?: "low" | "normal" | "high" | "urgent";
+    status?: "open" | "waiting";
+  }[];
+  services: {
+    account: string;
+    line?: string;
+    type:
+      | "endorsement"
+      | "cancellation"
+      | "certificate"
+      | "billing"
+      | "document"
+      | "general";
+    title: string;
+    description: string;
+    owner: DemoOwner;
+    due: number;
+    status?: "open" | "in_progress" | "waiting";
+  }[];
+  claims: {
+    account: string;
+    line: string;
+    lossDaysAgo: number;
+    reportedDaysAgo: number;
+    description: string;
+    claimNumber?: string;
+    status: "notice" | "reported" | "open";
+    adjuster?: string;
+    owner: DemoOwner;
+    followUp: number;
+    reserve?: number;
+    paid?: number;
+  }[];
+  notes: {
+    account: string;
+    category: "note" | "call" | "meeting" | "email" | "review";
+    daysAgo: number;
+    body: string;
+  }[];
+} = {
+  tasks: [
+    {
+      account: "midwest-freight",
+      line: "Commercial auto",
+      title: "Call Dale with auto remarketing update",
+      description:
+        "Incumbent is at +22%. Share where the Riverbend and Prairie State quotes stand and confirm he wants options before the 15th.",
+      owner: "admin",
+      due: -2,
+      priority: "urgent",
+    },
+    {
+      account: "thompson",
+      line: "Homeowners",
+      title: "Present package remarket to the Thompsons",
+      description:
+        "Compare the incumbent renewal against the two new package quotes and call Julie.",
+      owner: "member",
+      due: 0,
+      priority: "high",
+    },
+    {
+      account: "lakeview-dental",
+      title: "Send renewal proposal to Dr. Raman",
+      description:
+        "Proposal is drafted. Explain the BOP increase (new building valuation) and the cyber limit option.",
+      owner: "admin",
+      due: 1,
+      priority: "high",
+    },
+    {
+      account: "capitol-cpa",
+      title: "Chase signed E&O and cyber applications",
+      description:
+        "Second reminder. Carrier needs signed applications 30 days before expiration.",
+      owner: "manager",
+      due: -1,
+      priority: "high",
+    },
+    {
+      account: "northside-brewing",
+      title: "Quote Northside Brewing (new business)",
+      description:
+        "Collect current dec pages, 3 years of loss runs, sales and liquor receipts. Markets: Prairie State BOP, Summit liquor.",
+      owner: "admin",
+      due: 3,
+    },
+    {
+      account: "kessler-electric",
+      title: "Discovery call with Brian Kessler",
+      description:
+        "Referral from Harbor & Pine. Ask about payroll, subcontractors, and when GL and WC renew.",
+      owner: "manager",
+      due: 2,
+    },
+    {
+      account: "murphy",
+      title: "Quote home and auto for Sean Murphy",
+      description:
+        "Referral from the Olsens. Needs declarations from the current carrier.",
+      owner: "member",
+      due: 4,
+    },
+    {
+      account: "ridgeline-roofing",
+      line: "Workers compensation",
+      title: "Review WC audit worksheet before submission",
+      description:
+        "Carrier audit found $85k of uninsured subcontractor payroll. Confirm certificates with Lisa before we dispute.",
+      owner: "manager",
+      due: -3,
+      priority: "high",
+      status: "waiting",
+    },
+    {
+      account: "garcia",
+      title: "Update Maria's autopay after renewal",
+      description: "Badger Valley moved her to a new billing account.",
+      owner: "member",
+      due: 0,
+    },
+    {
+      account: "baker",
+      title: "Cross-sell: quote Chris Baker's auto",
+      description:
+        "Auto is with a direct writer; renews in the spring. Set a reminder 45 days out.",
+      owner: "member",
+      due: 21,
+      priority: "low",
+    },
+    {
+      account: "olsen",
+      title: "Annual review with the Olsens",
+      description:
+        "Discuss umbrella limit (net worth went up) and the new boat.",
+      owner: "admin",
+      due: 9,
+    },
+    {
+      account: "oakridge-apartments",
+      title: "Request updated rent roll and building valuations",
+      description:
+        "Get it early: property is the largest premium in the book and renews in five months.",
+      owner: "manager",
+      due: 12,
+      priority: "low",
+    },
+  ],
+  services: [
+    {
+      account: "ridgeline-roofing",
+      line: "General liability",
+      type: "certificate",
+      title:
+        "Certificate for Westgate Mall reroof (additional insured, waiver)",
+      description:
+        "Holder: Westgate Properties LLC. Contract requires AI primary/non-contributory and waiver of subrogation.",
+      owner: "manager",
+      due: 0,
+      status: "in_progress",
+    },
+    {
+      account: "green-thumb",
+      line: "General liability",
+      type: "certificate",
+      title: "Certificate for City of Waunakee snow removal contract",
+      description: "Holder: City of Waunakee. AI on GL and auto.",
+      owner: "member",
+      due: 1,
+    },
+    {
+      account: "midwest-freight",
+      line: "Commercial auto",
+      type: "endorsement",
+      title: "Add 2025 Freightliner Cascadia (unit 15)",
+      description:
+        "VIN on the bill of sale in the filed email. Effective on delivery date.",
+      owner: "manager",
+      due: 0,
+      status: "in_progress",
+    },
+    {
+      account: "brooks",
+      line: "Personal auto",
+      type: "endorsement",
+      title: "Add teen driver: Emma Brooks",
+      description:
+        "Licensed last week. Ask about good student and driver training discounts.",
+      owner: "member",
+      due: 2,
+    },
+    {
+      account: "nguyen",
+      line: "Homeowners",
+      type: "endorsement",
+      title: "Mortgagee change after refinance",
+      description:
+        "New lender: Example Home Lending ISAOA/ATIMA. Send evidence of insurance to the lender.",
+      owner: "member",
+      due: -1,
+    },
+    {
+      account: "kim",
+      line: "Personal auto",
+      type: "endorsement",
+      title: "Replace vehicle: 2024 Hyundai Ioniq 5",
+      description: "Trading in the 2019 Civic. Confirm lienholder.",
+      owner: "member",
+      due: 1,
+      status: "waiting",
+    },
+    {
+      account: "miller",
+      line: "Personal auto",
+      type: "cancellation",
+      title: "Notice of cancellation for non-payment",
+      description:
+        "Riverbend notice received; cancels in 10 days unless paid. Call Jessica today.",
+      owner: "member",
+      due: 0,
+    },
+    {
+      account: "sunrise-bakery",
+      line: "Business owners",
+      type: "billing",
+      title: "Premium finance agreement for renewal",
+      description: "Elena wants to finance the renewal down payment.",
+      owner: "accountant",
+      due: 5,
+    },
+    {
+      account: "bright-path",
+      line: "Business owners",
+      type: "document",
+      title: "Proof of insurance for state licensing renewal",
+      description:
+        "Licensing office needs a certificate and the abuse/molestation endorsement.",
+      owner: "manager",
+      due: 3,
+    },
+    {
+      account: "fox-river-hoa",
+      line: "Commercial property",
+      type: "certificate",
+      title: "Certificates for unit owners' mortgage lenders (3)",
+      description: "Batch from Cornerstone Community Management.",
+      owner: "member",
+      due: 2,
+    },
+  ],
+  claims: [
+    {
+      account: "thompson",
+      line: "Homeowners",
+      lossDaysAgo: 210,
+      reportedDaysAgo: 209,
+      description: "Hail damage to roof and gutters.",
+      claimNumber: "LM-HO-26-118402",
+      status: "open",
+      adjuster: "K. Barrett (Lakeshore Mutual)",
+      owner: "member",
+      followUp: 5,
+      reserve: 18500,
+      paid: 14200,
+    },
+    {
+      account: "midwest-freight",
+      line: "Commercial auto",
+      lossDaysAgo: 19,
+      reportedDaysAgo: 18,
+      description:
+        "Unit 9 rear-ended a passenger vehicle at a stop light on I-94. Minor injury claimed by the other driver.",
+      claimNumber: "NWC-CA-26-55219",
+      status: "open",
+      adjuster: "R. Ellison (Northwoods Casualty)",
+      owner: "manager",
+      followUp: -1,
+      reserve: 42000,
+      paid: 6300,
+    },
+    {
+      account: "sunrise-bakery",
+      line: "Business owners",
+      lossDaysAgo: 4,
+      reportedDaysAgo: 3,
+      description:
+        "Walk-in cooler failed overnight; spoiled inventory and a day of closure.",
+      status: "reported",
+      owner: "manager",
+      followUp: 1,
+    },
+    {
+      account: "larson",
+      line: "Personal auto",
+      lossDaysAgo: 2,
+      reportedDaysAgo: 1,
+      description:
+        "Backed into a pole in a parking ramp. Rear bumper damage, no injuries.",
+      status: "notice",
+      owner: "member",
+      followUp: 0,
+    },
+  ],
+  notes: [
+    {
+      account: "midwest-freight",
+      category: "call",
+      daysAgo: 6,
+      body: "Dale wants the umbrella kept at $5M even if auto goes up. Prefers fewer, larger deductibles.",
+    },
+    {
+      account: "midwest-freight",
+      category: "meeting",
+      daysAgo: 34,
+      body: "Pre-renewal meeting at the terminal. Walked through new driver hiring standards and dash cams on all units, both helpful for remarketing.",
+    },
+    {
+      account: "lakeview-dental",
+      category: "review",
+      daysAgo: 22,
+      body: "Annual review with Dr. Raman. Adding a hygienist in Q1; asked about EPLI. Quote EPLI with the renewal.",
+    },
+    {
+      account: "thompson",
+      category: "call",
+      daysAgo: 12,
+      body: "Julie upset about the 17% increase. Explained the roof claim surcharge. Agreed to remarket the package.",
+    },
+    {
+      account: "ridgeline-roofing",
+      category: "email",
+      daysAgo: 3,
+      body: "Lisa sent certificates for 3 of the 5 subcontractors flagged in the audit.",
+    },
+    {
+      account: "capitol-cpa",
+      category: "note",
+      daysAgo: 1,
+      body: "Henry is referring two more firms. Send a thank-you card.",
+    },
+    {
+      account: "olsen",
+      category: "call",
+      daysAgo: 15,
+      body: "Erik bought a pontoon boat. Bound boat policy with Riverbend.",
+    },
+    {
+      account: "garcia",
+      category: "call",
+      daysAgo: 2,
+      body: "Left voicemail about renewal premium and billing change.",
+    },
+  ],
+};

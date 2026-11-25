@@ -18,6 +18,7 @@ import {
   DEMO_BOOK,
   DEMO_CARRIERS,
   DEMO_COVERAGES,
+  DEMO_WORK,
   demoPolicyNumber,
   type DemoOwner,
 } from "./demo-book.js";
@@ -181,6 +182,8 @@ export class LocalAmsDemo {
       );
       return draft;
     };
+    const accounts = new Map<string, string>();
+    const policies = new Map<string, string>();
     for (const entry of DEMO_BOOK) {
       const domain = entry.email.split("@")[1];
       const account = await create(`book:${entry.key}`, "accounts", {
@@ -225,6 +228,7 @@ export class LocalAmsDemo {
           name: exposure.name,
           values: exposure.values,
         });
+      accounts.set(entry.key, account.id);
       const renewals = new Map<number, string[]>();
       for (const [index, policy] of entry.policies.entries()) {
         const key = `book:${entry.key}:policy:${index}`;
@@ -271,6 +275,7 @@ export class LocalAmsDemo {
           premiumCents: policy.premium * 100,
           ...(previousPolicyId ? { previousPolicyId } : {}),
         });
+        policies.set(`${entry.key}:${policy.line}`, current.id);
         if (policy.expires <= 120)
           renewals.set(policy.expires, [
             ...(renewals.get(policy.expires) ?? []),
@@ -303,6 +308,69 @@ export class LocalAmsDemo {
           await run(`${key}:stage`, "renewals", "update", { stage }, renewal);
       }
     }
+    const on = (account: string, line?: string) => ({
+      accountId: accounts.get(account)!,
+      ...(line ? { policyId: policies.get(`${account}:${line}`)! } : {}),
+    });
+    for (const [index, task] of DEMO_WORK.tasks.entries()) {
+      const created = await create(`work:task:${index}`, "tasks", {
+        ...on(task.account, task.line),
+        title: task.title,
+        description: task.description,
+        ownerId: memberId(task.owner),
+        dueDate: calendarDays(date, task.due),
+        priority: task.priority ?? "normal",
+      });
+      if (task.status && task.status !== "open")
+        await run(
+          `work:task:${index}:status`,
+          "tasks",
+          "update",
+          { status: task.status },
+          created,
+        );
+    }
+    for (const [index, item] of DEMO_WORK.services.entries()) {
+      const created = await create(`work:service:${index}`, "services", {
+        ...on(item.account, item.line),
+        type: item.type,
+        title: item.title,
+        description: item.description,
+        ownerId: memberId(item.owner),
+        dueDate: calendarDays(date, item.due),
+      });
+      if (item.status && item.status !== "open")
+        await run(
+          `work:service:${index}:status`,
+          "services",
+          "update",
+          { status: item.status },
+          created,
+        );
+    }
+    for (const [index, claim] of DEMO_WORK.claims.entries())
+      await create(`work:claim:${index}`, "claims", {
+        ...on(claim.account, claim.line),
+        dateOfLoss: calendarDays(date, -claim.lossDaysAgo),
+        reportedDate: calendarDays(date, -claim.reportedDaysAgo),
+        description: claim.description,
+        ...(claim.claimNumber ? { claimNumber: claim.claimNumber } : {}),
+        status: claim.status,
+        ...(claim.adjuster ? { adjuster: claim.adjuster } : {}),
+        ownerId: memberId(claim.owner),
+        followUpDate: calendarDays(date, claim.followUp),
+        reserveCents: (claim.reserve ?? 0) * 100,
+        paidCents: (claim.paid ?? 0) * 100,
+      });
+    for (const [index, note] of DEMO_WORK.notes.entries())
+      await create(`work:note:${index}`, "notes", {
+        ...on(note.account),
+        category: note.category,
+        occurredAt: new Date(
+          new Date(input.startedAt).getTime() - note.daysAgo * 86_400_000,
+        ).toISOString(),
+        body: note.body,
+      });
   }
   private async populate(state: DemoState): Promise<AmsDemoInfo> {
     const { tenantId, startedAt } = state;
@@ -568,28 +636,28 @@ export function demoChat(members: AmsMember[], now: Date) {
       authorId: manager,
       minutes: 185,
       read: true,
-      body: "Morning, team. Harbor & Pine's renewal is our priority this week.",
+      body: "Morning, team. Midwest Freight and Lakeview Dental renewals are the priority this week. Both are inside 40 days.",
     },
     {
       team: true,
       authorId: accountant,
       minutes: 130,
       read: true,
-      body: "Direct-bill statements came in. I'll reconcile them after lunch.",
+      body: "Lakeshore and Northwoods commission statements came in. I'll reconcile them after lunch.",
     },
     {
       ...direct(member),
       authorId: admin,
       minutes: 95,
       read: true,
-      body: "Can you take the certificate request for Harbor & Pine's new project?",
+      body: "Can you take the Fox River lender certificates and Harbor & Pine's new project certificate?",
     },
     {
       ...direct(member),
       authorId: member,
       minutes: 90,
       read: true,
-      body: "Yes, I'll have it out today.",
+      body: "Yes. Also heads up: Jessica Miller got a non-pay cancellation notice. Calling her this morning.",
     },
     {
       team: true,
