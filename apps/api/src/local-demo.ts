@@ -4,16 +4,24 @@ import { join } from "node:path";
 import { z } from "zod";
 import {
   amsCalendarDate,
+  amsFormChosenLines,
+  amsFormContact,
+  amsFormFromCatalog,
+  amsFormIssues,
+  amsFormSlug,
+  amsFormSnapshot,
   type AmsActor,
+  type AmsFormAnswers,
   type AmsCommand,
   type AmsMember,
   type AmsRecord,
 } from "@openams/contracts";
-import { AmsError, type AmsRepository } from "./repository.js";
+import { AmsError, digest, type AmsRepository } from "./repository.js";
 import { AmsService } from "./service.js";
 import { calendarDays } from "./task-follow-up.js";
 import { fileOriginalEmail } from "./correspondence.js";
 import type { AmsFiles } from "./files.js";
+import { formSubmissionId, type AmsFormLinks } from "./form-links.js";
 import {
   DEMO_BOOK,
   DEMO_CARRIERS,
@@ -80,6 +88,11 @@ export class LocalAmsDemo {
     private repository: AmsRepository,
     private files: AmsFiles,
     private members: AmsMember[],
+    /**
+     * Hosted forms for the fictional agency. Where `publishing` is off (the public demo)
+     * the sample form is left paused, so no public link ever opens.
+     */
+    private forms?: { links: AmsFormLinks; publishing: boolean },
   ) {}
   async load() {
     try {
@@ -633,6 +646,7 @@ export class LocalAmsDemo {
       });
     }
     await service.processDueReminders(tenantId);
+    if (this.forms) await this.populateForms({ tenantId, actor, service, id, run, create });
     return {
       tenantId,
       startedAt,
@@ -644,7 +658,255 @@ export class LocalAmsDemo {
       serviceId: serviceRequest.id,
     };
   }
+  /**
+   * A sample hosted form with two submissions waiting to be filed, so the Forms screen
+   * has something to read. Every step is safe to repeat.
+   */
+  private async populateForms(context: {
+    tenantId: string;
+    actor: AmsActor;
+    service: AmsService;
+    id: (key: string) => string;
+    run: (
+      key: string,
+      kind: AmsCommand["kind"],
+      action: AmsCommand["action"],
+      data: Record<string, unknown>,
+      record?: AmsRecord,
+    ) => Promise<{ records: AmsRecord[] }>;
+    create: (
+      key: string,
+      kind: AmsCommand["kind"],
+      data: Record<string, unknown>,
+    ) => Promise<AmsRecord>;
+  }) {
+    const { tenantId, actor, service, id, run, create } = context;
+    const { links, publishing } = this.forms!;
+    const current = async () =>
+      (await this.repository.get(tenantId, "forms", created.id))!;
+    const created = await create("form", "forms", {
+      name: "Personal lines quote",
+      title: "Let's get you a quote",
+      intro:
+        "Answer a few questions and attach what you have. We'll review it and come back to you with options.",
+      ...amsFormFromCatalog(DEMO_FORM_LINES),
+      branding: {
+        agencyName: "Harbor Agency",
+        phone: "555-0100",
+        email: "hello@harbor.example.test",
+      },
+      consent: "By sending this form you agree that we may contact you about your insurance.",
+      ownerId: "local_member",
+    });
+    let form = await current();
+    if (form.data.status === "draft") {
+      const suffix = createHash("sha256").update(id("form-link")).digest("hex");
+      // Letters only, so the sample link reads as an ordinary one.
+      const linkId = `${amsFormSlug(form.data.name)}-${[...suffix.slice(0, 20)]
+        .map((char, index, all) =>
+          index % 2 ? "" : "abcdefghjkmnpqrstuvwxyz"[parseInt(char + all[index + 1], 16) % 23],
+        )
+        .join("")}`;
+      if (publishing) await links.claim(linkId, { tenantId, formId: form.id });
+      await service.publishForm(actor, {
+        id: id("form-publish"),
+        action: "form.publish",
+        kind: "forms",
+        recordId: form.id,
+        expectedVersion: form.version,
+        data: { linkId },
+        reason: "",
+      });
+      form = await current();
+    }
+    for (const sample of DEMO_SUBMISSIONS) {
+      const submissionId = formSubmissionId(form.id, id(sample.key));
+      if (await this.repository.get(tenantId, "formsubmissions", submissionId)) continue;
+      // Skip a sample only if the form can no longer take it (a retry after pausing).
+      if (form.data.status !== "published") continue;
+      const input = { lines: sample.lines, answers: sample.answers, files: [] };
+      const issues = amsFormIssues(form.data, input);
+      if (issues.length)
+        throw new AmsError(
+          500,
+          "demo_form_invalid",
+          `The sample submission no longer fits the sample form: ${issues[0].section}.${issues[0].field}.`,
+        );
+      const sections = amsFormSnapshot(form.data, input);
+      await service.receiveFormSubmission(tenantId, form, {
+        submissionId,
+        lines: amsFormChosenLines(form.data, sample.lines),
+        contact: amsFormContact(sections),
+        sections,
+        files: [],
+        digest: digest(input),
+      });
+    }
+    // An open sandbox never hosts a public form: the sample is left paused there.
+    if (!publishing && form.data.status === "published")
+      await run("form-pause", "forms", "form.pause", {}, form);
+  }
 }
+
+/** Two fictional clients' answers to the demo agency's sample form. */
+const DEMO_FORM_LINES = ["auto", "home", "renters"];
+const DEMO_SUBMISSIONS: { key: string; lines: string[]; answers: AmsFormAnswers }[] = [
+  {
+    key: "form-submission-1",
+    lines: ["auto", "home"],
+    answers: {
+      contact: [
+        {
+          name: "Jamie Rivera",
+          email: "jamie.rivera@example.test",
+          phone: "(555) 010-0167",
+          contact_method: "Text message",
+          address: {
+            line1: "214 Sample Orchard Road",
+            line2: "",
+            city: "Tarrytown",
+            state: "NY",
+            postalCode: "10591",
+          },
+        },
+      ],
+      auto_drivers: [
+        {
+          name: "Jamie Rivera",
+          birth_date: "1987-06-21",
+          relationship: "Myself",
+          marital_status: "Married",
+          license_state: "NY",
+          incidents: false,
+        },
+        {
+          name: "Sam Rivera",
+          birth_date: "1989-02-08",
+          relationship: "Spouse or partner",
+          marital_status: "Married",
+          license_state: "NY",
+          incidents: true,
+          incidents_detail: "One speeding ticket in spring 2025. No accidents.",
+        },
+      ],
+      auto_vehicles: [
+        {
+          year: "2022",
+          make: "Subaru",
+          model: "Outback",
+          ownership: "Finance",
+          use: "Commuting",
+          annual_miles: "11000",
+          garaging_zip: "10591",
+        },
+        {
+          year: "2017",
+          make: "Honda",
+          model: "CR-V",
+          ownership: "Own",
+          use: "Pleasure",
+          annual_miles: "6000",
+          garaging_zip: "10591",
+        },
+      ],
+      auto_current: [
+        { insured: true, carrier: "Example Mutual", expires: "2027-01-15", premium: "1840" },
+      ],
+      home_property: [
+        {
+          address: {
+            line1: "214 Sample Orchard Road",
+            line2: "",
+            city: "Tarrytown",
+            state: "NY",
+            postalCode: "10591",
+          },
+          use: "Primary home",
+          home_type: "Single-family house",
+          year_built: "1998",
+          square_feet: "2150",
+          stories: "2",
+          construction: "Wood frame",
+          foundation: "Finished basement",
+          roof: "Asphalt shingle",
+          roof_year: "2019",
+        },
+      ],
+      home_features: [
+        {
+          heating: "Gas furnace or boiler",
+          wood_stove: false,
+          pool: false,
+          trampoline: false,
+          dogs: true,
+          dog_breeds: "Labrador retriever",
+          dog_bite: false,
+          protection: ["Smoke detectors", "Deadbolt locks"],
+        },
+      ],
+      home_coverage: [
+        {
+          buying: false,
+          rebuild_cost: "410000",
+          deductible: "$1,000",
+          liability: "$500,000",
+          valuables: false,
+          claims: false,
+        },
+      ],
+      home_current: [{ insured: true, carrier: "Example Mutual", premium: "1420" }],
+      wrap_up: [
+        {
+          notes:
+            "We bought the house in 2021. Looking to put both cars and the home with one agency. Fictional demo submission.",
+        },
+      ],
+    },
+  },
+  {
+    key: "form-submission-2",
+    lines: ["renters"],
+    answers: {
+      contact: [
+        {
+          name: "Taylor Nguyen",
+          email: "taylor.nguyen@example.test",
+          phone: "(555) 010-0118",
+          contact_method: "Email",
+        },
+      ],
+      renters_home: [
+        {
+          address: {
+            line1: "88 Example Court",
+            line2: "Apt 3B",
+            city: "White Plains",
+            state: "NY",
+            postalCode: "10601",
+          },
+          home_type: "Apartment",
+          roommates: false,
+          dogs: false,
+        },
+      ],
+      renters_coverage: [
+        {
+          belongings: "22000",
+          deductible: "$500",
+          liability: "$300,000",
+          valuables: false,
+          landlord_requires: true,
+          landlord_name: "Example Court Apartments",
+          claims: false,
+        },
+      ],
+      renters_current: [
+        { insured: false, uninsured_reason: "First apartment. My landlord asks for proof of renters insurance." },
+      ],
+      wrap_up: [{ notes: "Lease starts on the 1st. Fictional demo submission." }],
+    },
+  },
+];
 
 /**
  * The demo agency's team chat: a short, fictional morning of messages, timed back

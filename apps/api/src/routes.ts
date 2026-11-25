@@ -34,6 +34,7 @@ import type { MailboxStore } from "./mailbox-store.js";
 import type { MailboxVault } from "./mailbox-credentials.js";
 import type { MailboxOAuth } from "./mailbox-oauth.js";
 import { mountMailboxRoutes } from "./mailbox-routes.js";
+import { mountFormRoutes, type AmsFormsDependency } from "./form-routes.js";
 
 export interface AmsRouterDependencies {
   authenticate: RequestHandler;
@@ -64,6 +65,8 @@ export interface AmsRouterDependencies {
     vault?: MailboxVault;
     oauth?: MailboxOAuth;
   };
+  /** Hosted forms: public intake forms and their submissions. Without it the workspace hides them. */
+  forms?: AmsFormsDependency;
   demo?: {
     /** The demo a tenant is, or null when the tenant isn't a demo. */
     info: (tenantId: string) => AmsDemoInfo | null;
@@ -142,6 +145,7 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
       handle,
     );
   mountCertificateRoutes(router, deps, handle, service);
+  mountFormRoutes(router, deps, handle, service);
   router.post(
     "/internal/ams/reminders/process",
     rateLimit(requestLimitOptions(10)),
@@ -207,6 +211,8 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
         chatEnabled: Boolean(deps.chat),
         originalEmailFilingEnabled: Boolean(deps.originalEmail),
         mailboxReviewEnabled: Boolean(deps.mailboxes),
+        formsEnabled: Boolean(deps.forms),
+        formPublishingEnabled: Boolean(deps.forms && deps.forms.publishing !== false),
         readableKinds: AMS_KINDS.filter((kind) => amsCanRead(actor.role, kind)),
         certificateTemplateHashes:
           (await deps.certificateTemplates?.(actor.tenantId)) ?? [],

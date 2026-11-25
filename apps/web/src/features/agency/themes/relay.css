@@ -70,17 +70,17 @@ html[data-theme="relay"] :is(.agency-app, .agency-dialog, .agency-bootstrap) {
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }
-html[data-theme="relay"] .agency-app h1 {
+html[data-theme="relay"] .agency-app h1:where(:not(.hf *)) {
   font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.25;
 }
-html[data-theme="relay"] .agency-app h2 {
+html[data-theme="relay"] .agency-app h2:where(:not(.hf *)) {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-html[data-theme="relay"] .agency-app small {
+html[data-theme="relay"] .agency-app small:where(:not(.hf *)) {
   color: var(--color-ink-muted);
 }
 html[data-theme="relay"] .agency-skip {
@@ -2842,7 +2842,7 @@ html[data-theme="relay"] .agency-app .agency-team-list small {
   html[data-theme="relay"] .agency-app .agency-main:has(.account-workspace) {
     padding: 20px 16px 40px;
   }
-  html[data-theme="relay"] .agency-app h1 {
+  html[data-theme="relay"] .agency-app h1:where(:not(.hf *)) {
     font-size: 22px;
   }
   html[data-theme="relay"] .agency-app .agency-demo-banner {

@@ -15,6 +15,8 @@ _Last reviewed: November 17, 2026._
 - Servicing tasks and requests with assignment and due dates
 - Documents and correspondence filed to the account, with history
 - CSV import with a dry run before anything is saved, and full export
+- [Hosted forms](docs/forms.md): public intake forms for 15 lines of business, with
+  file uploads, a review queue and one-step filing to an account
 - Certificates with agency-supplied authorized templates, holder management,
   reviewed PDFs, issuance snapshots, external-delivery records and linked reissue
   requests. OpenAMS distributes no licensed forms and does not send the certificate

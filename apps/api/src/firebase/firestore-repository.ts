@@ -142,6 +142,8 @@ export class FirestoreAmsRepository implements AmsRepository {
   private refs(tenantId: string) {
     const tenant = this.tenant(tenantId);
     return {
+      tenantId,
+      promotion: (id: string) => this.db.collection("form_promotions").doc(id),
       revision: (key: string) => tenant.collection("revisions").doc(key),
       receipt: (id: string) =>
         tenant.collection("receipts").doc(opaqueDocId(id)),
@@ -298,6 +300,7 @@ export class FirestoreAmsRepository implements AmsRepository {
 
 type Refs = ReturnType<FirestoreAmsRepository["refs"]>;
 class BufferedAttempt {
+  private consumedPromotion?: DocumentReference;
   private records = new Map<string, { record: AmsRecord; value: string }>();
   private revisions = new Map<string, string>();
   private receipts = new Map<string, string>();
@@ -328,6 +331,14 @@ class BufferedAttempt {
   }
   api(): AmsTransaction {
     return {
+      consumeFormPromotion: async (attempt, submissionId) => {
+        const ref = this.refs.promotion(attempt);
+        const entry = await this.read(ref);
+        if (!entry.exists || entry.get("recovering") || entry.get("tenantId") !== this.refs.tenantId ||
+            entry.get("submissionId") !== submissionId)
+          throw new AmsError(409, "upload_expired", "The file reservation expired. Send the form again.");
+        this.consumedPromotion = ref;
+      },
       revision: async (kind, id, revision) => {
         assertKind(kind);
         if (!SAFE_ID.test(id) || !Number.isSafeInteger(revision) || revision < 1)
@@ -430,6 +441,7 @@ class BufferedAttempt {
         doc.exists ? (doc.get("auditSequence") ?? 0) : 0,
       );
     }
+    if (this.consumedPromotion) tx.delete(this.consumedPromotion);
     for (const { record, value } of this.records.values())
       tx.set(this.recordRef(record.kind, record.id), {
         id: record.id,

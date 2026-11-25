@@ -16,6 +16,10 @@ import {
   AmsEndorsementChangeSchema,
   AmsCertificatePreparationSchema,
   AmsCertificateDeliverySchema,
+  AmsFormFilingSchema,
+  AmsFormLinkId,
+  AmsFormSubmissionSchema,
+  amsFormValueText,
   amsCanRead,
   amsCanWrite,
   type AmsActor,
@@ -53,7 +57,56 @@ const immutableKinds: AmsKind[] = [
   "journals",
   "reminders",
   "correspondence",
+  "formsubmissions",
 ];
+/** What the public form endpoint hands over once a submission has been checked. */
+const FormReceipt = AmsFormSubmissionSchema.pick({
+  lines: true,
+  contact: true,
+  sections: true,
+  files: true,
+  digest: true,
+})
+  .extend({ submissionId: z.string().uuid(), promotionId: z.uuid().optional() })
+  .strict();
+export type AmsFormReceipt = z.input<typeof FormReceipt>;
+/** A submission as plain text, for the note left on the account it is filed to. */
+function submissionText(submission: AmsData<"formsubmissions">) {
+  const lines = [`Form submission: ${submission.formName}`];
+  if (submission.lines.length)
+    lines.push(
+      `Coverage requested: ${submission.lines.map((line) => line.label).join(", ")}`,
+    );
+  for (const section of submission.sections)
+    section.items.forEach((item, index) => {
+      lines.push(
+        "",
+        section.noun
+          ? `${section.title}: ${item.title || `${section.noun} ${index + 1}`}`
+          : section.title,
+      );
+      for (const answer of item.answers)
+        lines.push(`${answer.label}: ${amsFormValueText(answer.value, answer.type)}`);
+    });
+  if (submission.files.length)
+    lines.push("", `Files: ${submission.files.map((file) => file.name).join(", ")}`);
+  const text = lines.join("\n");
+  return text.length > 20_000 ? `${text.slice(0, 19_990)}\n[…]` : text;
+}
+type SubmissionItem =
+  AmsData<"formsubmissions">["sections"][number]["items"][number];
+function submissionAddress(item: SubmissionItem | undefined) {
+  const value = item?.answers.find((answer) => answer.type === "address")?.value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return {
+    line1: value.line1,
+    line2: value.line2,
+    city: value.city,
+    state: value.state.toUpperCase(),
+    postalCode: value.postalCode,
+    country: "US",
+  };
+}
 const nonterminalRenewals = new Set([
   "review",
   "collecting",
@@ -191,6 +244,46 @@ export class AmsService {
       records: results.flatMap((result) => result.records),
     };
   }
+  /** Only the publish route, which holds the public link index, may assign a link. */
+  async publishForm(actor: AmsActor, command: AmsCommand) {
+    if (command.action !== "form.publish" || command.kind !== "forms")
+      throw new AmsError(400, "invalid_publish", "Invalid form operation.");
+    return this.run(actor, command, false, false, false, false, false, true);
+  }
+  /**
+   * Saves a checked submission from the public form endpoint and opens its follow-up
+   * task. Nothing else is created until a person files the submission to an account.
+   */
+  async receiveFormSubmission(
+    tenantId: string,
+    form: Pick<AmsRecord<"forms">, "id" | "version">,
+    input: AmsFormReceipt,
+  ) {
+    const actor: AmsActor = {
+      tenantId,
+      userId: "ams_forms",
+      name: "Hosted form",
+      role: "admin",
+    };
+    return this.run(
+      actor,
+      {
+        id: input.submissionId,
+        action: "formSubmission.receive",
+        kind: "forms",
+        recordId: form.id,
+        expectedVersion: form.version,
+        data: input,
+        reason: "",
+      },
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+    );
+  }
   async fileCorrespondence(actor: AmsActor, command: AmsCommand) {
     if (command.action !== "correspondence.file" || command.kind !== "accounts")
       throw new AmsError(
@@ -208,6 +301,7 @@ export class AmsService {
     verifiedWorker = false,
     verifiedCorrespondence = false,
     verifiedCertificate = false,
+    verifiedForm = false,
   ): Promise<AmsCommandResult> {
     const command = parseAms(AmsCommandSchema, input);
     if (
@@ -238,6 +332,16 @@ export class AmsService {
         403,
         "renderer_required",
         "Prepare the PDF through the certificate workflow.",
+      );
+    if (
+      (command.action === "form.publish" ||
+        command.action === "formSubmission.receive") &&
+      !verifiedForm
+    )
+      throw new AmsError(
+        403,
+        "form_workflow_required",
+        "Publish forms and receive submissions through the form workflow.",
       );
     const approvedTemplates = command.action.startsWith("certificate.")
       ? ((await this.deps.certificateTemplates?.(actor.tenantId)) ?? [])
@@ -2990,6 +3094,277 @@ export class AmsService {
           command.data,
         );
         await save("suggestions", { ...suggestion.data, ...input }, suggestion);
+      } else if (
+        (command.action === "form.publish" || command.action === "form.pause") &&
+        original?.kind === "forms"
+      ) {
+        const form = original as AmsRecord<"forms">;
+        // A form outlives the person it was assigned to; never block on that here.
+        const ownerId =
+          form.data.ownerId && memberIds.has(form.data.ownerId)
+            ? form.data.ownerId
+            : null;
+        if (command.action === "form.pause") {
+          if (form.data.status !== "published")
+            throw new AmsError(409, "form_not_published", "This form is not published.");
+          await save("forms", { ...form.data, ownerId, status: "paused" }, form);
+        } else {
+          const { linkId } = parseAms(
+            z.object({ linkId: AmsFormLinkId }).strict(),
+            command.data,
+          );
+          if (form.data.status === "published")
+            throw new AmsError(409, "form_published", "This form is already published.");
+          if (form.data.linkId && form.data.linkId !== linkId)
+            throw new AmsError(
+              409,
+              "link_assigned",
+              "This form already has a link. Refresh and publish again.",
+            );
+          await save(
+            "forms",
+            {
+              ...form.data,
+              ownerId,
+              status: "published",
+              linkId,
+              publishedAt: form.data.publishedAt ?? now,
+            },
+            form,
+          );
+        }
+      } else if (
+        command.action === "formSubmission.receive" &&
+        original?.kind === "forms"
+      ) {
+        const form = original as AmsRecord<"forms">;
+        if (form.data.status !== "published")
+          throw new AmsError(
+            409,
+            "form_closed",
+            "This form is not taking submissions.",
+          );
+        const { submissionId, promotionId, ...received } = parseAms(FormReceipt, command.data);
+        if (promotionId) {
+          if (!tx.consumeFormPromotion) throw new Error("Missing form promotion store.");
+          await tx.consumeFormPromotion(promotionId, submissionId);
+        }
+        const canOwn = (id: string | null | undefined) =>
+          Boolean(id) &&
+          members.some(
+            (member) =>
+              member.id === id && member.active && amsCanWrite(member.role, "tasks"),
+          );
+        const ownerId =
+          [form.data.ownerId, workspace?.data.defaultOwnerId].find(canOwn) ?? null;
+        const { contact } = received;
+        const task = await save("tasks", {
+          accountId: null,
+          title: `Review form submission: ${contact.businessName || contact.name}`.slice(0, 500),
+          description: [
+            `${contact.name} sent the form "${form.data.name}".`,
+            received.lines.length
+              ? `Coverage requested: ${received.lines.map((line) => line.label).join(", ")}.`
+              : "",
+            [contact.email, contact.phone].filter(Boolean).join(" · "),
+            "Open Forms to read the answers and file them to an account.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          ownerId,
+          dueDate: calendarDays(businessDate, form.data.followUpDays),
+        });
+        await save(
+          "formsubmissions",
+          {
+            ...received,
+            formId: form.id,
+            formName: form.data.name,
+            formRevision: form.revision,
+            taskId: task.id,
+            submittedAt: now,
+          },
+          undefined,
+          { id: submissionId },
+        );
+      } else if (
+        command.action === "formSubmission.file" &&
+        original?.kind === "formsubmissions"
+      ) {
+        const submission = original as AmsRecord<"formsubmissions">;
+        if (submission.data.status !== "new")
+          throw new AmsError(
+            409,
+            "submission_closed",
+            "This submission was already filed or dismissed.",
+          );
+        if (
+          !amsCanWrite(actor.role, "accounts") ||
+          !amsCanWrite(actor.role, "documents")
+        )
+          throw new AmsError(
+            403,
+            "permission_denied",
+            "Your role cannot file submissions to accounts.",
+          );
+        const filing = parseAms(AmsFormFilingSchema, command.data);
+        const { contact, sections, files, formName } = submission.data;
+        const mailing = submissionAddress(
+          sections.find((section) => section.id === "contact")?.items[0],
+        );
+        // The account is saved first so the change history opens on it.
+        const account = filing.accountId
+          ? await canonicalAccount(filing.accountId)
+          : await save("accounts", {
+              name: filing.account!.name,
+              type: filing.account!.type,
+              status: "prospect",
+              email: contact.email,
+              phone: contact.phone,
+              address: mailing,
+              source: "Hosted form",
+            });
+        const accountId = account.id;
+        if (filing.createContact)
+          await save("contacts", {
+            accountId,
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            primary: !filing.accountId,
+            address: mailing,
+          });
+        if (filing.createExposures)
+          for (const section of sections) {
+            if (!section.exposure) continue;
+            for (const [index, item] of section.items.entries()) {
+              const address = submissionAddress(item);
+              await save("exposures", {
+                accountId,
+                kind: section.exposure,
+                name: (
+                  item.title ||
+                  address.line1 ||
+                  `${section.title}${section.items.length > 1 ? ` ${index + 1}` : ""}`
+                ).slice(0, 500),
+                address,
+                description: `From the form "${formName}".`,
+                values: Object.fromEntries(
+                  item.answers
+                    .filter((answer) => answer.type !== "address")
+                    .slice(0, 50)
+                    .map((answer) => [
+                      answer.label.slice(0, 100),
+                      typeof answer.value === "boolean"
+                        ? answer.value
+                        : amsFormValueText(answer.value, answer.type).slice(0, 1000),
+                    ]),
+                ),
+              });
+            }
+          }
+        const filed: AmsData<"formsubmissions">["files"] = [];
+        for (const file of files) {
+          // The public endpoint verified these bytes and their fingerprint on receipt.
+          const document = await save("documents", {
+            accountId,
+            policyId: null,
+            name: file.name,
+            mediaType: file.mediaType,
+            bytes: file.bytes,
+            sha256: file.sha256,
+            storageKey: file.storageKey,
+            category: "application",
+            supersedesId: null,
+            description: `${file.label}. From the form "${formName}".`,
+          });
+          filed.push({ ...file, documentId: document.id });
+        }
+        await save("notes", {
+          accountId,
+          policyId: null,
+          body: submissionText(submission.data),
+          category: "note",
+          occurredAt: submission.data.submittedAt,
+        });
+        const task = submission.data.taskId
+          ? await tx.get("tasks", submission.data.taskId)
+          : null;
+        // A follow-up outlives the person it was given to: whoever files it takes it on.
+        if (task && !task.archivedAt && !task.data.accountId)
+          await save(
+            "tasks",
+            {
+              ...task.data,
+              accountId,
+              ownerId:
+                task.data.ownerId && !memberIds.has(task.data.ownerId)
+                  ? actor.userId
+                  : task.data.ownerId,
+            },
+            task,
+          );
+        await save(
+          "formsubmissions",
+          {
+            ...submission.data,
+            files: filed,
+            status: "filed",
+            accountId,
+            filedAt: now,
+            filedBy: actor.userId,
+          },
+          submission,
+        );
+      } else if (
+        (command.action === "formSubmission.dismiss" ||
+          command.action === "formSubmission.reopen") &&
+        original?.kind === "formsubmissions"
+      ) {
+        const submission = original as AmsRecord<"formsubmissions">;
+        const dismissing = command.action === "formSubmission.dismiss";
+        if (submission.data.status !== (dismissing ? "new" : "dismissed"))
+          throw new AmsError(
+            409,
+            "submission_closed",
+            dismissing
+              ? "This submission was already filed or dismissed."
+              : "Only a dismissed submission can be reopened.",
+          );
+        await save(
+          "formsubmissions",
+          {
+            ...submission.data,
+            status: dismissing ? "dismissed" : "new",
+            dismissReason: dismissing ? reason() : "",
+          },
+          submission,
+        );
+        const task =
+          dismissing && submission.data.taskId
+            ? await tx.get("tasks", submission.data.taskId)
+            : null;
+        // Nothing is left to follow up on a dismissed submission.
+        if (
+          task &&
+          !task.archivedAt &&
+          task.data.status !== "done" &&
+          !task.data.followUp.repeatEveryDays
+        )
+          await save(
+            "tasks",
+            {
+              ...task.data,
+              ownerId:
+                task.data.ownerId && !memberIds.has(task.data.ownerId)
+                  ? actor.userId
+                  : task.data.ownerId,
+              status: "done",
+              completedAt: now,
+              completedBy: actor.userId,
+            },
+            task,
+          );
       } else
         throw new AmsError(
           400,
@@ -3113,6 +3488,7 @@ export class AmsService {
       },
       statements: { status: "review" },
       suggestions: { status: "new", votes: [], response: "" },
+      forms: { status: "draft", linkId: null, publishedAt: null },
     };
     for (const [field, expected] of Object.entries(initial[kind] ?? {}))
       if (field in data && digest(data[field]) !== digest(expected))
@@ -3165,6 +3541,7 @@ export class AmsService {
           ]
         : []),
       ...(record.kind === "suggestions" ? ["status", "votes", "response"] : []),
+      ...(record.kind === "forms" ? ["status", "linkId", "publishedAt"] : []),
       "replacementPolicyIds",
     ])
       if (field in patch && digest(patch[field]) !== digest(current[field]))

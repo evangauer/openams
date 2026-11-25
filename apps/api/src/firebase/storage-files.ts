@@ -98,6 +98,25 @@ export class CloudStorageAmsFiles implements AmsFiles {
       await this.compare(file, sha256);
     }
   }
+  /**
+   * Deletes one object and gives back its reserved bytes. A missing object is fine. So
+   * is a service account that may create and read objects but not delete them (403):
+   * the object stays where it is, for the bucket's lifecycle rule to expire.
+   */
+  async remove(key: string) {
+    const file = this.file(key);
+    let bytes = 0;
+    try {
+      const [metadata] = await file.getMetadata();
+      bytes = Number(metadata.size) || 0;
+      await file.delete();
+    } catch (error) {
+      if (statusOf(error) === 404 || statusOf(error) === 403) return;
+      throw error;
+    }
+    const tenantId = key.split("/")[this.prefix.split("/").length]!;
+    if (bytes) await this.quota?.release(tenantId, bytes).catch(() => undefined);
+  }
   async get(key: string) {
     const file = this.file(key);
     try {

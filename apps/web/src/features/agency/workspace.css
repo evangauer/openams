@@ -19,19 +19,24 @@
   min-height: 100vh;
   background: #f8faf7;
 }
-.agency-app button,
+/*
+ * The form builder shows the client's page (.hf) inside the workspace. The element rules
+ * here and in the themes leave it alone (`:where(:not(.hf *))`, which adds no weight), so
+ * the preview is styled by the same rules as the page a client opens and nothing else.
+ */
+.agency-app button:where(:not(.hf *)),
 .agency-dialog button,
 .agency-bootstrap button {
   font: inherit;
   cursor: pointer;
 }
-.agency-app button:disabled,
+.agency-app button:disabled:where(:not(.hf *)),
 .agency-dialog button:disabled {
   cursor: wait;
   opacity: 0.55;
 }
-.agency-app button,
-.agency-app a,
+.agency-app button:where(:not(.hf *)),
+.agency-app a:where(:not(.hf *)),
 .agency-dialog button,
 .agency-dialog a,
 .agency-dialog input,
@@ -39,28 +44,28 @@
 .agency-dialog textarea {
   outline-offset: 4px;
 }
-.agency-app h1,
-.agency-app h2,
-.agency-app h3,
-.agency-app p {
+.agency-app h1:where(:not(.hf *)),
+.agency-app h2:where(:not(.hf *)),
+.agency-app h3:where(:not(.hf *)),
+.agency-app p:where(:not(.hf *)) {
   margin: 0;
 }
-.agency-app a {
+.agency-app a:where(:not(.hf *)) {
   color: inherit;
   text-decoration: none;
 }
-.agency-app h1 {
+.agency-app h1:where(:not(.hf *)) {
   font-size: 31px;
   line-height: 1.25;
   letter-spacing: -1.1px;
   font-weight: 550;
 }
-.agency-app h2 {
+.agency-app h2:where(:not(.hf *)) {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.3px;
 }
-.agency-app small {
+.agency-app small:where(:not(.hf *)) {
   font-size: 12px;
   color: #737c73;
 }
@@ -561,7 +566,7 @@
 .agency-toolbar-spacer {
   flex: 1;
 }
-.agency-app select {
+.agency-app select:where(:not(.hf *)) {
   font: inherit;
   font-size: 11px;
   border: 1px solid #dfe5db;
@@ -1282,7 +1287,7 @@
   .agency-main {
     padding: 25px 18px 40px;
   }
-  .agency-app h1 {
+  .agency-app h1:where(:not(.hf *)) {
     font-size: 26px;
   }
   .agency-page-header {

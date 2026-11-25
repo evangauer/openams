@@ -144,20 +144,20 @@ html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog {
 html:is([data-theme="portal"], [data-theme="brand"]) .agency-app {
   background: var(--portal-canvas);
 }
-html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1 {
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1:where(:not(.hf *)) {
   font-size: clamp(28px, 2.4vw, 34px);
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--portal-navy);
 }
-html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h2 {
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h2:where(:not(.hf *)) {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--portal-navy);
 }
-html:is([data-theme="portal"], [data-theme="brand"]) .agency-app small {
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app small:where(:not(.hf *)) {
   font-size: 13px;
   color: var(--portal-muted);
 }
@@ -809,7 +809,7 @@ html:is([data-theme="portal"], [data-theme="brand"]) .portal-search:focus-within
   background: #ffffff;
   box-shadow: 0 0 0 3px rgba(var(--portal-accent-rgb), 0.16);
 }
-html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select,
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select:where(:not(.hf *)),
 html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog select {
   min-height: 42px;
   padding: 0 12px;
@@ -1431,7 +1431,7 @@ html:is([data-theme="portal"], [data-theme="brand"]) .agency-field textarea:focu
 html:is([data-theme="portal"], [data-theme="brand"]) .account-profile-form :is(input, select, textarea):focus-visible,
 html:is([data-theme="portal"], [data-theme="brand"]) .agency-reminder-actions input:focus-visible,
 html:is([data-theme="portal"], [data-theme="brand"]) .agency-dialog select:focus-visible,
-html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select:focus-visible {
+html:is([data-theme="portal"], [data-theme="brand"]) .agency-app select:focus-visible:where(:not(.hf *)) {
   outline: 2px solid var(--portal-teal);
   outline-offset: 0;
   border-color: var(--portal-teal);
@@ -3180,7 +3180,7 @@ html:is([data-theme="portal"], [data-theme="brand"]) .agency-statement-review ar
     gap: 4px 12px;
     padding: 14px 16px 80px;
   }
-  html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1 {
+  html:is([data-theme="portal"], [data-theme="brand"]) .agency-app h1:where(:not(.hf *)) {
     font-size: 28px;
   }
   html:is([data-theme="portal"], [data-theme="brand"]) .agency-page-header {

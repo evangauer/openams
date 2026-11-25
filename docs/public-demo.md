@@ -34,6 +34,7 @@ carriers, mailboxes or payment providers, and forgets everything when it restart
 | --- | --- |
 | File uploads | Refused (403, "turned off in the public demo"). The disk is shared scratch space. |
 | Mailboxes | Not offered; the demo connects to no mailbox. |
+| Hosted forms | Built and previewed, never published: anyone can open a sandbox, so no public form link opens here. The sample form is paused. |
 | Lifetime | `AMS_DEMO_HOURS` (default 24). Then the sandbox's records, history, chat and files are deleted. |
 | Sandboxes alive at once | `AMS_DEMO_MAX_SANDBOXES` (default 200). At the cap, a sandbox idle for 15 minutes makes room; otherwise new visitors are asked to try again shortly (429). |
 | New sandboxes | `AMS_DEMO_STARTS_PER_MINUTE` (default 30), across all visitors. |

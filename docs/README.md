@@ -13,6 +13,7 @@
 - [Certificate servicing](certificates.md): authorized templates, holders, reviewed PDFs, delivery records and reissue.
 - [Architecture](architecture.md): application and adapter boundaries.
 - [Incoming mail](mailboxes.md): optional Gmail and Microsoft 365 setup, review workflow and current limits.
+- [Hosted forms](forms.md): public intake forms by line of business, submissions and filing, limits and protections.
 
 Start with the [README](../README.md) for local evaluation and the
 [roadmap](../ROADMAP.md) for planned work.

@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { AmsFormSchema, AmsFormSubmissionSchema } from "./forms.js";
+export * from "./forms.js";
+export * from "./form-catalog.js";
 export type { AmsMailboxProvider, AmsMailboxMessageStatus, AmsMailboxError, AmsMailbox, AmsIncomingMessage, AmsMailboxList, AmsMailboxFolderPage } from "./mailbox.js";
 
 export const AMS_SCHEMA_VERSION = 1;
@@ -913,6 +916,8 @@ export const AMS_KINDS = [
   "journals",
   "statements",
   "suggestions",
+  "forms",
+  "formsubmissions",
 ] as const;
 export const AmsKindSchema = z.enum(AMS_KINDS);
 export type AmsKind = z.infer<typeof AmsKindSchema>;
@@ -940,6 +945,8 @@ export const AMS_DATA_SCHEMAS = {
   journals: AmsJournalSchema,
   statements: AmsStatementSchema,
   suggestions: AmsSuggestionSchema,
+  forms: AmsFormSchema,
+  formsubmissions: AmsFormSubmissionSchema,
 } as const;
 export type AmsData<K extends AmsKind = AmsKind> = z.infer<
   (typeof AMS_DATA_SCHEMAS)[K]
@@ -1042,6 +1049,12 @@ export const AmsCommandSchema = z
       "statement.post",
       "suggestion.vote",
       "suggestion.respond",
+      "form.publish",
+      "form.pause",
+      "formSubmission.receive",
+      "formSubmission.file",
+      "formSubmission.dismiss",
+      "formSubmission.reopen",
     ]),
     kind: AmsKindSchema,
     recordId: AmsId.optional(),
@@ -1074,7 +1087,8 @@ export const AMS_FINANCIAL_KINDS: readonly AmsKind[] = [
   "statements",
 ];
 export function amsCanWrite(role: AmsRole, kind: AmsKind) {
-  if (kind === "workspace" || kind === "certificatetemplates")
+  // Agency setup, approved templates and what the agency publishes to the public.
+  if (kind === "workspace" || kind === "certificatetemplates" || kind === "forms")
     return ["admin", "manager"].includes(role);
   // Everyone on the team, viewers included, can suggest and support ideas.
   if (kind === "suggestions") return true;

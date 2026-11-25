@@ -25,6 +25,7 @@ export interface AmsReceipt {
 }
 export type AmsQuery = AmsList & { accountIds?: string[] };
 export interface AmsTransaction {
+  consumeFormPromotion?(attempt: string, submissionId: string): Promise<void>;
   accountEpoch(id: string): Promise<number>;
   advanceAccountEpoch(id: string): Promise<number>;
   get<K extends AmsKind>(kind: K, id: string): Promise<AmsRecord<K> | null>;

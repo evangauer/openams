@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
 import { AmsError } from "./repository.js";
 
 export interface AmsFiles {
   put(key: string, bytes: Buffer, mediaType: string): Promise<void>;
   get(key: string): Promise<Buffer>;
+  /**
+   * Deletes one object; a missing one is not an error. Only a store that holds
+   * temporary files (uploads a form's visitor has not submitted yet) needs it. Account
+   * documents are never removed.
+   */
+  remove?(key: string): Promise<void>;
 }
 export const fileHash = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -111,8 +117,29 @@ export class LocalAmsFiles implements AmsFiles {
   get(key: string) {
     return readFile(this.path(key));
   }
+  async remove(key: string) {
+    await rm(this.path(key), { force: true });
+  }
   /** Deletes every file under a key prefix (a demo sandbox's documents). */
   async removeAll(prefix: string) {
     await rm(this.path(prefix), { recursive: true, force: true });
+  }
+  /**
+   * Deletes the folders two levels under a prefix (`<prefix>/<agency>/<upload>`) that
+   * were last written before `cutoff`: uploads nobody went on to submit.
+   */
+  async removeStale(prefix: string, cutoff: number) {
+    const root = this.path(prefix);
+    const folders = (path: string) =>
+      readdir(path, { withFileTypes: true })
+        .then((entries) => entries.filter((entry) => entry.isDirectory()))
+        .catch(() => []);
+    for (const agency of await folders(root))
+      for (const upload of await folders(join(root, agency.name))) {
+        const path = join(root, agency.name, upload.name);
+        const info = await stat(path).catch(() => null);
+        if (info && info.mtimeMs < cutoff)
+          await rm(path, { recursive: true, force: true });
+      }
   }
 }
