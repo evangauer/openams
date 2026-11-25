@@ -220,10 +220,17 @@ cannot be created by hand.
 | Size | 300 KB of answers; a submission record stays under the usual 128 KB |
 | Scripts | A field people never see, and a minimum time on the page. A refused submission is told so; nothing is silently dropped. |
 
-Only what is saved or stored spends a per-form limit, so requests that are refused cannot
-close a form to real clients. Per-client limits need `AMS_CLIENT_ADDRESS_DEPTH`
-([Per-agency limits](limits.md#client-admission-limits)). Without it they are kept per
-link instead, so traffic to one form never closes another agency's forms.
+Only what is saved or stored spends a per-form limit, and one client may spend only part
+of it (10 submissions at once, then 1 every 5 minutes; 20 uploads at once, then 1 every 2
+minutes), so one address cannot hold a form at "busy" for everyone else. If a submission
+is not saved in the end, the files copied for it are taken back out of the agency's
+documents.
+
+Per-client limits need `AMS_CLIENT_ADDRESS_DEPTH`
+([Per-agency limits](limits.md#client-admission-limits)). Without it the per-minute limits
+are kept per link instead: traffic to one form never closes another agency's forms, but
+one visitor's requests, refused ones included, count against everyone using that link.
+Set it before a deployment on the public internet publishes forms.
 
 **Uploads wait before they count.** A file a client attaches is held under
 `form-uploads/<agency>/…`, apart from the agency's documents and outside its storage

@@ -68,7 +68,13 @@ export interface AmsFormsDependency {
    * How many submissions and uploads one form may save in a burst on this process
    * before the steady rate applies (defaults: 40 and 60).
    */
-  burst?: { submissions?: number; uploads?: number };
+  burst?: {
+    submissions?: number;
+    uploads?: number;
+    /** What one client may take of a form's allowance, where the client is known. */
+    clientSubmissions?: number;
+    clientUploads?: number;
+  };
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A per-form daily allowance of uploaded bytes, held in this process. */
@@ -339,6 +345,21 @@ export function mountFormRoutes(
     capacity: forms.burst?.uploads ?? 60,
     refillPerSecond: 1 / 60,
   });
+  // One client may spend only part of a form's allowance, and earns it back more slowly
+  // than the form does, so a single address cannot hold a form at "busy" for everyone.
+  // Where the deployment can't tell clients apart there is nothing to key this on.
+  const submissionsPerClient = new TokenBuckets({
+    capacity: forms.burst?.clientSubmissions ?? 10,
+    refillPerSecond: 1 / 300,
+  });
+  const uploadsPerClient = new TokenBuckets({
+    capacity: forms.burst?.clientUploads ?? 20,
+    refillPerSecond: 1 / 120,
+  });
+  const clientShare = (buckets: TokenBuckets, request: Request, formId: string) => {
+    const client = admissionKey(request);
+    return client === "instance" || buckets.take(`${formId}:${client}`);
+  };
   const uploadAllowance = new UploadAllowance(
     forms.uploadBytesPerDay ?? 500 * 1024 * 1024,
   );
@@ -527,6 +548,7 @@ export function mountFormRoutes(
       const metadata = uploadMetadata(filename, request.body);
       if (
         !uploadAllowance.has(form.id, request.body.length) ||
+        !clientShare(uploadsPerClient, request, form.id) ||
         !uploadsPerForm.take(form.id)
       )
         throw busy();
@@ -666,27 +688,48 @@ export function mountFormRoutes(
           checked.push({ upload, bytes, name: metadata.name, mediaType: metadata.mediaType });
         }
         // Only a submission that is about to be saved spends the form's allowance.
-        if (!submissionsPerForm.take(form.id)) throw busy();
+        if (
+          !clientShare(submissionsPerClient, request, form.id) ||
+          !submissionsPerForm.take(form.id)
+        )
+          throw busy();
         const files: AmsData<"formsubmissions">["files"] = [];
-        for (const { upload, bytes, name, mediaType } of checked) {
-          const storageKey = formUploadKey(tenantId, submissionId, upload.sha256);
-          // Now it joins the agency's documents (and counts toward its storage).
-          await deps.files.put(storageKey, bytes, mediaType);
-          files.push({
-            id: `f${files.length + 1}`,
-            section: upload.section,
-            item: upload.item,
-            field: upload.field,
-            label: sections
-              .find((section) => section.id === upload.section)!
-              .fields.find((item) => item.id === upload.field)!.label,
-            name,
-            mediaType,
-            bytes: bytes.length,
-            sha256: upload.sha256,
-            storageKey,
-            documentId: null,
-          });
+        // If nothing ends up saved, the copies made for it are nobody's documents: take
+        // them back out so they don't stay charged to the agency. A store that may not
+        // delete simply keeps them.
+        const abandon = async () => {
+          const saved = await deps
+            .repository()
+            .get(tenantId, "formsubmissions", submissionId)
+            .catch(() => "unknown" as const);
+          if (saved) return;
+          for (const file of files)
+            await deps.files.remove?.(file.storageKey).catch(() => undefined);
+        };
+        try {
+          for (const { upload, bytes, name, mediaType } of checked) {
+            const storageKey = formUploadKey(tenantId, submissionId, upload.sha256);
+            // Now it joins the agency's documents (and counts toward its storage).
+            await deps.files.put(storageKey, bytes, mediaType);
+            files.push({
+              id: `f${files.length + 1}`,
+              section: upload.section,
+              item: upload.item,
+              field: upload.field,
+              label: sections
+                .find((section) => section.id === upload.section)!
+                .fields.find((item) => item.id === upload.field)!.label,
+              name,
+              mediaType,
+              bytes: bytes.length,
+              sha256: upload.sha256,
+              storageKey,
+              documentId: null,
+            });
+          }
+        } catch (error) {
+          await abandon();
+          throw error;
         }
         try {
           const snapshot = amsFormSnapshot(form.data, input);
@@ -709,6 +752,7 @@ export function mountFormRoutes(
           // The form was edited between the check and the save: check again, once.
           if (error instanceof AmsError && error.code === "stale_record" && attempt < 1)
             continue;
+          await abandon();
           if (error instanceof AmsError && error.code === "record_too_large")
             throw new AmsError(
               413,

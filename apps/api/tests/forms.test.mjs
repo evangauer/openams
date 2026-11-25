@@ -73,6 +73,7 @@ async function harness(t, forms = {}) {
   const url = `http://127.0.0.1:${server.address().port}`;
   const json = async (response) => ({ status: response.status, body: await response.json().catch(() => ({})) });
   const api = {
+    url,
     state,
     links,
     files,
@@ -589,6 +590,64 @@ test("only what is saved spends a form's allowance, and one link's traffic stays
     if ((await api.submit("no-such-form-aaaaaaaaaa", body())).status === 429) refused++;
   assert.ok(refused >= 3, "the flooded link is limited");
   assert.equal((await api.submit(other.data.linkId, { ...body(), revision: other.revision })).status, 201);
+});
+
+test("one client takes only its share of a form, and an unsaved submission leaves no files behind", async (t) => {
+  const api = await harness(t, { burst: { submissions: 4, clientSubmissions: 2 } });
+  const form = await published(api);
+  const link = form.data.linkId;
+  const body = (extra = {}) => ({ id: randomUUID(), revision: form.revision, lines: [], answers: autoAnswers(), files: [], elapsedMs: 60_000, ...extra });
+  const from = (client, payload) =>
+    fetch(`${api.url}/public/forms/${link}/submissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-openams-client": client },
+      body: JSON.stringify(payload),
+    }).then(async (response) => ({ status: response.status, body: await response.json() }));
+  // One address sends as fast as it can: it gets its share and no more.
+  assert.equal((await from("203.0.113.7", body())).status, 201);
+  assert.equal((await from("203.0.113.7", body())).status, 201);
+  const refused = await from("203.0.113.7", body());
+  assert.equal(refused.status, 429);
+  assert.equal(refused.body.error, "form_busy");
+  // The form is still open to everyone else.
+  assert.equal((await from("203.0.113.8", body())).status, 201);
+  assert.equal((await api.list("formsubmissions")).length, 3);
+
+  // A submission that can't be saved takes its copied files back out of the documents.
+  // Here the store refuses the second of two files.
+  const submission = randomUUID();
+  const OTHER = Buffer.from("%PDF-1.4\n% a second fixture file\n");
+  const one = await api.upload(link, submission, "dec.pdf", PDF);
+  const two = await api.upload(link, submission, "extra.pdf", OTHER);
+  assert.equal(one.status, 201, JSON.stringify(one.body));
+  assert.equal(two.status, 201, JSON.stringify(two.body));
+  const put = api.files.put.bind(api.files);
+  const remove = api.files.remove.bind(api.files);
+  const stored = [];
+  const removed = [];
+  api.files.put = async (key, ...rest) => {
+    if (stored.length === 1) throw new Error("the store refused this file");
+    stored.push(key);
+    return put(key, ...rest);
+  };
+  api.files.remove = async (key) => {
+    removed.push(key);
+    return remove(key);
+  };
+  const failed = await from(
+    "203.0.113.9",
+    body({
+      id: submission,
+      files: [
+        { section: "auto_current", item: 0, field: "declarations", name: "dec.pdf", sha256: one.body.sha256, bytes: PDF.length },
+        { section: "wrap_up", item: 0, field: "documents", name: "extra.pdf", sha256: two.body.sha256, bytes: OTHER.length },
+      ],
+    }),
+  );
+  assert.ok(failed.status >= 500, JSON.stringify(failed.body));
+  assert.equal(stored.length, 1);
+  assert.deepEqual(removed, stored, "the copy made for the unsaved submission is removed");
+  assert.equal((await api.list("formsubmissions")).length, 3, "nothing was saved");
 });
 
 test("a follow-up outlives the person it was given to", async (t) => {
