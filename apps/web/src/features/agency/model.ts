@@ -220,15 +220,21 @@ export async function readBook(
 ): Promise<Book> {
   // Load every cursor page, including sparse filtered pages. Never silently
   // turn a partial page into a book total or an incomplete relation picker.
-  const pairs = await Promise.all(
-    session.readableKinds.map(async (kind) => {
+  const pairs = [];
+  for (let start = 0; start < session.readableKinds.length; start += 4) {
+    const batch = session.readableKinds.slice(start, start + 4);
+    pairs.push(...await Promise.all(batch.map(async (kind) => {
       const records: AmsRecord[] = [];
       let cursor: string | null = null;
       do {
-        const page: AmsPage<AmsRecord> = await request(
-          `records/${kind}?limit=100${kind === "accounts" ? "&includeArchived=true" : ""}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-          { signal },
-        );
+        const path = `records/${kind}?limit=100${kind === "accounts" ? "&includeArchived=true" : ""}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+        const read = () => request<AmsPage<AmsRecord>>(path, { signal });
+        const page: AmsPage<AmsRecord> = await read().catch(async (error: unknown) => {
+          if (!(error instanceof AgencyRequestError) || error.status !== 503) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          signal.throwIfAborted();
+          return read();
+        });
         records.push(...page.items);
         cursor = page.nextCursor;
         if (records.length > 10_000)
@@ -237,8 +243,8 @@ export async function readBook(
           );
       } while (cursor);
       return [kind, records] as const;
-    }),
-  );
+    })));
+  }
   const book: Book = Object.fromEntries(pairs);
   if (book.accounts) {
     book.archivedAccounts = book.accounts.filter(

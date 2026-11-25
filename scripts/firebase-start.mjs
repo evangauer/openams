@@ -40,13 +40,32 @@ const env = {
   AMS_API_URL: `http://127.0.0.1:${apiPort}`,
   NEXT_TELEMETRY_DISABLED: "1",
 };
-const children = [
-  spawn(process.execPath, ["dist/firebase-server.js"], {
-    cwd: join(root, "apps/api"),
-    env,
-    stdio: "inherit",
-  }),
-  spawn(
+const children = new Set();
+let stopping = false;
+function stop() {
+  stopping = true;
+  for (const child of children) child.kill("SIGTERM");
+}
+function supervise(child) {
+  children.add(child);
+  child.once("exit", (code) => {
+    children.delete(child);
+    if (!stopping) process.exitCode = code || 1;
+    stop();
+  });
+  return child;
+}
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, stop);
+const api = supervise(spawn(process.execPath, ["dist/firebase-server.js"], {
+  cwd: join(root, "apps/api"),
+  env,
+  stdio: ["inherit", "inherit", "inherit", "ipc"],
+}));
+// The public port is the platform's readiness signal. Open it only once the
+// API can accept the very first proxied request.
+api.once("message", (message) => {
+  if (stopping || message !== "listening") return;
+  supervise(spawn(
     process.execPath,
     [
       join(root, "node_modules/next/dist/bin/next"),
@@ -57,12 +76,5 @@ const children = [
       process.env.PORT || "8080",
     ],
     { cwd: join(root, "apps/web"), env, stdio: "inherit" },
-  ),
-];
-const stop = () => children.forEach((child) => child.kill("SIGTERM"));
-for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, stop);
-for (const child of children)
-  child.on("exit", (code) => {
-    process.exitCode = code ?? 1;
-    stop();
-  });
+  ));
+});
