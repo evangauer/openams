@@ -314,10 +314,12 @@ app.use(
 const server = app.listen(
   Number(process.env.AMS_API_PORT ?? 4510),
   "127.0.0.1",
-  () =>
+  () => {
+    process.send?.("listening");
     console.log(
       `OpenAMS API ready on loopback${emulated ? " (Firebase emulators)" : ""}.`,
-    ),
+    );
+  },
 );
 for (const signal of ["SIGTERM", "SIGINT"] as const)
   process.on(signal, () => server.close(() => process.exit(0)));

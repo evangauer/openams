@@ -59,6 +59,37 @@ try {
   );
   assert.equal(findAccount(restricted, archived.id), undefined);
   assert.deepEqual(paths, ["/api/agency/records/tasks"]);
+  let pending = 0;
+  let peak = 0;
+  globalThis.fetch = async () => {
+    peak = Math.max(peak, ++pending);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    pending--;
+    return Response.json({ items: [], nextCursor: null });
+  };
+  const kinds = ["accounts", "tasks", "policies", "documents", "invoices", "notes"];
+  const complete = await readBook({ readableKinds: kinds } as AgencySession, new AbortController().signal);
+  assert.equal(peak, 4);
+  for (const kind of kinds) assert.ok(Object.hasOwn(complete, kind));
+
+  let calls = 0;
+  globalThis.fetch = async () => ++calls === 1
+    ? Response.json({}, { status: 503 })
+    : Response.json({ items: [active], nextCursor: null });
+  const session = { readableKinds: ["accounts"] } as AgencySession;
+  const recovered = await readBook(session, new AbortController().signal);
+  assert.equal(calls, 2);
+  assert.equal(recovered.accounts?.[0].id, active.id);
+
+  for (const [status, expectedCalls] of [[503, 2], [403, 1]]) {
+    calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return Response.json({}, { status });
+    };
+    await assert.rejects(readBook(session, new AbortController().signal), { status });
+    assert.equal(calls, expectedCalls);
+  }
 } finally {
   globalThis.fetch = originalFetch;
 }
