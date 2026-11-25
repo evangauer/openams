@@ -99,7 +99,9 @@ const firebase = initializeApp();
 const auth: BaseAuth = tenantId
   ? getAuth(firebase).tenantManager().authForTenant(tenantId)
   : getAuth(firebase);
-const db = databaseId ? getFirestore(firebase, databaseId) : getFirestore(firebase);
+const db = databaseId
+  ? getFirestore(firebase, databaseId)
+  : getFirestore(firebase);
 const bucket = getStorage(firebase).bucket(
   process.env.AMS_STORAGE_BUCKET || undefined,
 );
@@ -111,7 +113,10 @@ const agencyLimits = agencyLimitsFromEnv();
 const counters = firestoreCounters(db);
 const repository = new FirestoreAmsRepository(db);
 const files = new CloudStorageAmsFiles(bucket, {
-  quota: new AgencyStorageQuota({ store: counters, limitBytes: agencyLimits.storageBytes }),
+  quota: new AgencyStorageQuota({
+    store: counters,
+    limitBytes: agencyLimits.storageBytes,
+  }),
 });
 const members = firestoreMembers(db);
 const timeZone = firestoreTimeZone(db);
@@ -166,11 +171,16 @@ app.use(
       accessConfig.enabled && appOrigin
         ? {
             view: accessControl.access,
-            link: { appOrigin, url: accessConfig.url!, secret: accessConfig.secret! },
+            link: {
+              appOrigin,
+              url: accessConfig.url!,
+              secret: accessConfig.secret!,
+            },
           }
         : undefined,
     invitationMail: invitationMailFromEnv(process.env, appOrigin ?? undefined),
-    signInMail: signInMail && appOrigin ? { appOrigin, send: signInMail } : undefined,
+    signInMail:
+      signInMail && appOrigin ? { appOrigin, send: signInMail } : undefined,
   }),
 );
 app.use(
@@ -178,7 +188,9 @@ app.use(
     db,
     enabled: accessConfig.enabled,
     authorize: createSchedulerAuthorization({
-      serviceAccount: accessConfig.enabled ? accessConfig.serviceAccount : undefined,
+      serviceAccount: accessConfig.enabled
+        ? accessConfig.serviceAccount
+        : undefined,
       audience: appOrigin ? `${appOrigin}/api/internal/access` : undefined,
     }),
     onChange: accessControl.forget,
@@ -189,9 +201,7 @@ app.use(
 // are accepted.
 const statusServiceAccount = process.env.AMS_STATUS_SERVICE_ACCOUNT?.trim();
 const statusEnabled = Boolean(
-  statusServiceAccount &&
-    statusServiceAccount !== "off" &&
-    appOrigin,
+  statusServiceAccount && statusServiceAccount !== "off" && appOrigin,
 );
 app.use(
   createStatusApi({
@@ -224,7 +234,10 @@ const inSequence =
   };
 const tenantOf = (response: express.Response) =>
   (response.locals.amsActor as AmsActor | undefined)?.tenantId;
-const agencyRequests = agencyRequestLimit(tenantOf, agencyRequestBuckets(agencyLimits));
+const agencyRequests = agencyRequestLimit(
+  tenantOf,
+  agencyRequestBuckets(agencyLimits),
+);
 const agencyWrites = agencyWriteLimit(
   tenantOf,
   new AgencyWriteQuota({ store: counters, limit: agencyLimits.writesPerDay }),

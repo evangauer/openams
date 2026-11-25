@@ -211,9 +211,13 @@ export class SqliteAmsChat implements AmsChatStore {
     sequence: number,
   ) {
     return this.run((db) => {
-      const latest = Number(db.prepare(
-        "SELECT MAX(seq) AS seq FROM ams_chat_messages WHERE tenant=? AND conversation=?",
-      ).get(tenant, conversation)?.seq ?? 0);
+      const latest = Number(
+        db
+          .prepare(
+            "SELECT MAX(seq) AS seq FROM ams_chat_messages WHERE tenant=? AND conversation=?",
+          )
+          .get(tenant, conversation)?.seq ?? 0,
+      );
       db.prepare(
         "INSERT INTO ams_chat_reads(tenant,user_id,conversation,seq) VALUES(?,?,?,?) ON CONFLICT(tenant,user_id,conversation) DO UPDATE SET seq=excluded.seq WHERE excluded.seq > seq",
       ).run(tenant, userId, conversation, Math.min(sequence, latest));

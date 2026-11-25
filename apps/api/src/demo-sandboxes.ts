@@ -24,7 +24,11 @@ export interface DemoSandbox {
 
 export interface DemoSandboxOptions {
   /** Fills a new tenant with the fictional agency. */
-  seed: (input: { tenantId: string; commandId: string; startedAt: string }) => Promise<AmsDemoInfo>;
+  seed: (input: {
+    tenantId: string;
+    commandId: string;
+    startedAt: string;
+  }) => Promise<AmsDemoInfo>;
   /** Deletes everything a tenant stored. */
   remove: (tenantId: string) => Promise<void>;
   /** How long a sandbox lives. */
@@ -41,9 +45,11 @@ export interface DemoSandboxOptions {
   now?: () => number;
 }
 
-const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+const digest = (value: string) =>
+  createHash("sha256").update(value).digest("hex");
 /** A tenant id no visitor can guess from another's: it comes from the secret token. */
-export const sandboxTenantId = (token: string) => `local_demo_${digest(`sandbox:${token}`).slice(0, 24)}`;
+export const sandboxTenantId = (token: string) =>
+  `local_demo_${digest(`sandbox:${token}`).slice(0, 24)}`;
 
 export class DemoSandboxes {
   private byKey = new Map<string, DemoSandbox>();
@@ -71,9 +77,14 @@ export class DemoSandboxes {
    */
   admit(sandbox: DemoSandbox, write: boolean) {
     const minute = Math.floor(this.now() / 60_000);
-    if (sandbox.minute !== minute) Object.assign(sandbox, { minute, requests: 0 });
+    if (sandbox.minute !== minute)
+      Object.assign(sandbox, { minute, requests: 0 });
     if (++sandbox.requests > (this.options.requestsPerMinute ?? 600))
-      throw new AmsError(429, "rate_limited", "Too many requests. Wait a few seconds and try again.");
+      throw new AmsError(
+        429,
+        "rate_limited",
+        "Too many requests. Wait a few seconds and try again.",
+      );
     if (write && ++sandbox.writes > (this.options.maxWrites ?? 3000))
       throw new AmsError(
         429,
@@ -101,39 +112,72 @@ export class DemoSandboxes {
    */
   create(token: string, replaces?: string | null): Promise<DemoSandbox> {
     if (!SANDBOX_TOKEN.test(token))
-      return Promise.reject(new AmsError(400, "invalid_request", "Invalid demo session."));
+      return Promise.reject(
+        new AmsError(400, "invalid_request", "Invalid demo session."),
+      );
     const key = digest(token);
     const existing = this.byKey.get(key);
     if (existing) return Promise.resolve(existing);
     // Registered before the first await, so two requests with one token share one sandbox.
     const pending = this.pending.get(key);
     if (pending) return pending;
-    const work = this.open(token, key, replaces ?? null).finally(() => this.pending.delete(key));
+    const work = this.open(token, key, replaces ?? null).finally(() =>
+      this.pending.delete(key),
+    );
     this.pending.set(key, work);
     return work;
   }
-  private async open(token: string, key: string, replaces: string | null): Promise<DemoSandbox> {
+  private async open(
+    token: string,
+    key: string,
+    replaces: string | null,
+  ): Promise<DemoSandbox> {
     await this.sweep();
-    if (replaces && replaces !== token && SANDBOX_TOKEN.test(replaces)) await this.drop(digest(replaces));
+    if (replaces && replaces !== token && SANDBOX_TOKEN.test(replaces))
+      await this.drop(digest(replaces));
 
     const now = this.now();
     this.created = this.created.filter((at) => now - at < 60_000);
     if (this.created.length >= this.options.perMinute)
-      throw new AmsError(429, "demo_busy", "The demo is busy right now. Try again in a minute.");
+      throw new AmsError(
+        429,
+        "demo_busy",
+        "The demo is busy right now. Try again in a minute.",
+      );
     // This request is already counted in `pending`.
     if (this.byKey.size + this.pending.size > this.options.max) {
       // Make room with the sandbox left alone the longest, if it really is idle.
-      const [idleKey, idle] = [...this.byKey.entries()].sort((a, b) => a[1].lastSeenAt - b[1].lastSeenAt)[0] ?? [];
+      const [idleKey, idle] =
+        [...this.byKey.entries()].sort(
+          (a, b) => a[1].lastSeenAt - b[1].lastSeenAt,
+        )[0] ?? [];
       if (!idleKey || !idle || now - idle.lastSeenAt < this.idleMs)
-        throw new AmsError(429, "demo_busy", "The demo is busy right now. Try again in a few minutes.");
+        throw new AmsError(
+          429,
+          "demo_busy",
+          "The demo is busy right now. Try again in a few minutes.",
+        );
       await this.drop(idleKey);
     }
     this.created.push(now);
 
     const tenantId = sandboxTenantId(token);
     try {
-      const info = await this.options.seed({ tenantId, commandId: `sandbox:${key}`, startedAt: new Date(now).toISOString() });
-      const sandbox: DemoSandbox = { tenantId, createdAt: now, lastSeenAt: now, expiresAt: now + this.options.ttlMs, info, minute: 0, requests: 0, writes: 0 };
+      const info = await this.options.seed({
+        tenantId,
+        commandId: `sandbox:${key}`,
+        startedAt: new Date(now).toISOString(),
+      });
+      const sandbox: DemoSandbox = {
+        tenantId,
+        createdAt: now,
+        lastSeenAt: now,
+        expiresAt: now + this.options.ttlMs,
+        info,
+        minute: 0,
+        requests: 0,
+        writes: 0,
+      };
       this.byKey.set(key, sandbox);
       this.byTenant.set(tenantId, sandbox);
       return sandbox;
@@ -153,7 +197,9 @@ export class DemoSandboxes {
   /** Deletes expired sandboxes. Returns how many went. */
   async sweep() {
     const now = this.now();
-    const expired = [...this.byKey.entries()].filter(([, sandbox]) => sandbox.expiresAt <= now);
+    const expired = [...this.byKey.entries()].filter(
+      ([, sandbox]) => sandbox.expiresAt <= now,
+    );
     for (const [key] of expired) await this.drop(key).catch(() => undefined);
     return expired.length;
   }

@@ -22,17 +22,9 @@ import {
   type AmsRecord,
   type AmsPage,
 } from "@openams/contracts";
-import {
-  accountScope,
-  AmsError,
-  type AmsRepository,
-} from "./repository.js";
+import { accountScope, AmsError, type AmsRepository } from "./repository.js";
 import { AmsService, parseAms } from "./service.js";
-import {
-  fileHash,
-  verifiedFile,
-  type AmsFiles,
-} from "./files.js";
+import { fileHash, verifiedFile, type AmsFiles } from "./files.js";
 import { EmailFilingInput, fileOriginalEmail } from "./correspondence.js";
 import { applyImport, planImport } from "./import.js";
 import type { AmsDemoInfo } from "./local-demo.js";
@@ -68,7 +60,11 @@ export interface AmsRouterDependencies {
   }>;
   /** Team chat and presence. Without it the workspace hides chat. */
   chat?: AmsChatStore;
-  mailboxes?: { store: MailboxStore; vault?: MailboxVault; oauth?: MailboxOAuth };
+  mailboxes?: {
+    store: MailboxStore;
+    vault?: MailboxVault;
+    oauth?: MailboxOAuth;
+  };
   /** Hosted forms: public intake forms and their submissions. Without it the workspace hides them. */
   forms?: AmsFormsDependency;
   demo?: {
@@ -136,7 +132,18 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
       certificateTemplates: deps.certificateTemplates,
       timeZone: deps.timeZone,
     });
-  if (deps.mailboxes) mountMailboxRoutes(router, new Mailboxes({ ...deps.mailboxes, repository: deps.repository(), files: deps.files, service, members: deps.members }), handle);
+  if (deps.mailboxes)
+    mountMailboxRoutes(
+      router,
+      new Mailboxes({
+        ...deps.mailboxes,
+        repository: deps.repository(),
+        files: deps.files,
+        service,
+        members: deps.members,
+      }),
+      handle,
+    );
   mountCertificateRoutes(router, deps, handle, service);
   mountFormRoutes(router, deps, handle, service);
   router.post(
@@ -473,11 +480,22 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
   // One import step per agency at a time, and a few per process: planning an import
   // reads the agency's accounts, policies and the target kind into memory.
   const importsRunning = new Set<string>();
-  const guardedImport = async <T>(actor: AmsActor, work: () => Promise<T>): Promise<T> => {
+  const guardedImport = async <T>(
+    actor: AmsActor,
+    work: () => Promise<T>,
+  ): Promise<T> => {
     if (importsRunning.has(actor.tenantId))
-      throw new AmsError(409, "import_in_progress", "An import step for this workspace is already running. Try again when it finishes.");
+      throw new AmsError(
+        409,
+        "import_in_progress",
+        "An import step for this workspace is already running. Try again when it finishes.",
+      );
     if (importsRunning.size >= MAX_CONCURRENT_EXPORTS)
-      throw new AmsError(503, "import_busy", "The server is busy with other imports. Try again in a minute.");
+      throw new AmsError(
+        503,
+        "import_busy",
+        "The server is busy with other imports. Try again in a minute.",
+      );
     importsRunning.add(actor.tenantId);
     try {
       return await work();
@@ -488,7 +506,11 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
   router.post(
     "/ams/import/validate",
     handle(async (request, response, actor) => {
-      response.json(await guardedImport(actor, () => planImport(actor, request.body, deps.repository())));
+      response.json(
+        await guardedImport(actor, () =>
+          planImport(actor, request.body, deps.repository()),
+        ),
+      );
     }),
   );
   router.post(

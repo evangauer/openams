@@ -35,16 +35,18 @@ export async function fileOriginalEmail(input: {
   repository: AmsRepository;
   files: AmsFiles;
   service: AmsService;
-  source?: {
-    leadId: string;
-    messageId: string;
-    direction: "inbound" | "outbound";
-  } | {
-    provider: "gmail" | "microsoft365";
-    connectionId: string;
-    messageId: string;
-    direction: "inbound" | "outbound" | "unknown";
-  };
+  source?:
+    | {
+        leadId: string;
+        messageId: string;
+        direction: "inbound" | "outbound";
+      }
+    | {
+        provider: "gmail" | "microsoft365";
+        connectionId: string;
+        messageId: string;
+        direction: "inbound" | "outbound" | "unknown";
+      };
 }) {
   const { actor, accountId, repository, filing } = input;
   if (!amsCanWrite(actor.role, "correspondence"))
@@ -171,10 +173,18 @@ export async function fileOriginalEmail(input: {
     messageAt,
     messageId: (mail.messageId || "").slice(0, 1000),
     ...emailPreview(mail),
-    source: input.source ? "provider" in input.source ? input.source.provider : "relay_mailbox" : "eml_upload",
-    sourceLeadId: input.source && "leadId" in input.source ? input.source.leadId : null,
+    source: input.source
+      ? "provider" in input.source
+        ? input.source.provider
+        : "relay_mailbox"
+      : "eml_upload",
+    sourceLeadId:
+      input.source && "leadId" in input.source ? input.source.leadId : null,
     sourceMessageId: input.source?.messageId ?? null,
-    sourceConnectionId: input.source && "connectionId" in input.source ? input.source.connectionId : null,
+    sourceConnectionId:
+      input.source && "connectionId" in input.source
+        ? input.source.connectionId
+        : null,
     sha256: original.sha256,
     originalDocumentId: documents[0]!.id,
     documentIds: documents.map((d) => d.id),
