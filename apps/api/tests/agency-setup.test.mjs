@@ -313,7 +313,8 @@ test("interrupted demo preparation resumes committed steps without duplicate acc
     (await f.list(result.tenantId, "commissions")).length,
     demoPolicies,
   );
-  assert.equal((await f.list(result.tenantId, "correspondence")).length, 1);
+  // The walkthrough email and three more filed with attachments.
+  assert.equal((await f.list(result.tenantId, "correspondence")).length, 4);
   assert.equal((await f.list(result.tenantId, "workspace")).length, 1);
 });
 

@@ -22,6 +22,7 @@ import {
   demoPolicyNumber,
   type DemoOwner,
 } from "./demo-book.js";
+import { seedDemoFiles, type DemoPolicyMeta } from "./demo-documents.js";
 
 type DemoCreate = (
   key: string,
@@ -184,6 +185,7 @@ export class LocalAmsDemo {
     };
     const accounts = new Map<string, string>();
     const policies = new Map<string, string>();
+    const policyMeta = new Map<string, DemoPolicyMeta>();
     for (const entry of DEMO_BOOK) {
       const domain = entry.email.split("@")[1];
       const account = await create(`book:${entry.key}`, "accounts", {
@@ -276,6 +278,18 @@ export class LocalAmsDemo {
           ...(previousPolicyId ? { previousPolicyId } : {}),
         });
         policies.set(`${entry.key}:${policy.line}`, current.id);
+        policyMeta.set(`${entry.key}:${policy.line}`, {
+          id: current.id,
+          accountName: entry.legalName ?? entry.name,
+          address: `${entry.street}, ${entry.city}, NY ${entry.postalCode}`,
+          line: policy.line,
+          number: String((current.data as { number: string }).number),
+          carrier: DEMO_CARRIERS[policy.carrier],
+          effectiveDate,
+          expirationDate,
+          premium: policy.premium,
+          coverages: DEMO_COVERAGES[policy.line] ?? [],
+        });
         if (policy.expires <= 120)
           renewals.set(policy.expires, [
             ...(renewals.get(policy.expires) ?? []),
@@ -371,6 +385,7 @@ export class LocalAmsDemo {
         ).toISOString(),
         body: note.body,
       });
+    return { accounts, policyMeta };
   }
   private async populate(state: DemoState): Promise<AmsDemoInfo> {
     const { tenantId, startedAt } = state;
@@ -551,7 +566,25 @@ export class LocalAmsDemo {
       occurredAt: startedAt,
       body: "Morgan has shared updated payroll for the renewal. Open Correspondence to review the original email and attachment.",
     });
-    await this.seedBook({ date, startedAt, create, run, memberId });
+    const book = await this.seedBook({
+      date,
+      startedAt,
+      create,
+      run,
+      memberId,
+    });
+    await seedDemoFiles({
+      ...book,
+      date,
+      at: new Date(startedAt),
+      tenantId,
+      actor,
+      service,
+      repository: this.repository,
+      files: this.files,
+      id,
+      done: async (key) => Boolean(await receipt(key)),
+    });
     let filed = (await receipt("email"))?.result;
     if (!filed) {
       const bytes = Buffer.from(
