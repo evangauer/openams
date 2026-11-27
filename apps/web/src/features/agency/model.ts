@@ -160,6 +160,37 @@ export class AgencyRequestError extends Error {
     super(message);
   }
 }
+/**
+ * Raised on window when a workspace request shows the person can't continue in this tab:
+ * their session ended (401), or their membership of the agency did (403). The workspace
+ * pauses background work and explains, instead of each feature retrying on its own.
+ */
+export const SESSION_ENDED_EVENT = "openams:session-ended";
+export type SessionEndReason = "signed_out" | "access_ended";
+export interface SessionEndedDetail {
+  reason: SessionEndReason;
+}
+/** Why a refusal ends the session in this tab, or null when it doesn't. */
+export function sessionEndReason(status: number, code: string): SessionEndReason | null {
+  if (status === 401) return "signed_out";
+  if (status === 403 && (code === "membership_inactive" || code === "agency_required"))
+    return "access_ended";
+  return null;
+}
+/** Tells the workspace a request was refused because the session ended. */
+export function announceSessionEnded(reason: SessionEndReason) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<SessionEndedDetail>(SESSION_ENDED_EVENT, { detail: { reason } }),
+  );
+}
+/** A signed-in person coming back is the same one only with the same agency. */
+export function sameActor(
+  a: Pick<AmsActor, "userId" | "tenantId">,
+  b: Pick<AmsActor, "userId" | "tenantId"> | null | undefined,
+) {
+  return Boolean(b) && a.userId === b!.userId && a.tenantId === b!.tenantId;
+}
 /** Used when a refusal carries no message of its own; the API's messages take precedence. */
 const STATUS_MESSAGES: Record<number, string> = {
   413: "This is more than your agency can store or send at once. Nothing was saved.",
@@ -177,12 +208,16 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     window.dispatchEvent(
       new CustomEvent(ACCESS_REFUSED_EVENT, { detail: { code: value.error, message: value.message } }),
     );
-  if (!response.ok)
+  if (!response.ok) {
+    const code = value.error || value.code || "request_failed";
+    const ended = sessionEndReason(response.status, code);
+    if (ended) announceSessionEnded(ended);
     throw new AgencyRequestError(
       response.status,
-      value.error || value.code || "request_failed",
+      code,
       value.message || STATUS_MESSAGES[response.status] || value.error || "The request failed.",
     );
+  }
   return value as T;
 }
 export async function command(input: AmsCommand) {
