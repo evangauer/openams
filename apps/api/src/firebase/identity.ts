@@ -196,6 +196,57 @@ class IdentityError extends Error {
 }
 const unauthorized = () =>
   new IdentityError(401, "unauthorized", "Sign in again to continue.");
+
+/**
+ * A session that couldn't be accepted, and why (for logs only: a Firebase error code or
+ * a fixed word, never a token, uid or address). A refused session (401) signs the person
+ * out; Firebase Auth being unreachable (503) doesn't, so the browser just tries again.
+ */
+export class SessionRefused extends IdentityError {
+  constructor(
+    public reason: string,
+    transient = false,
+  ) {
+    super(
+      transient ? 503 : 401,
+      transient ? "auth_unavailable" : "unauthorized",
+      transient
+        ? "Your sign-in couldn't be checked just now. Try again in a moment."
+        : "Sign in again to continue.",
+    );
+  }
+}
+/** Firebase answers that mean Auth couldn't be reached, not that the session is bad. */
+const TRANSIENT_AUTH_CODES = new Set([
+  "auth/internal-error",
+  "auth/network-request-failed",
+  "app/network-error",
+]);
+function authFailure(error: unknown): SessionRefused {
+  if (error instanceof SessionRefused) return error;
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code !== "string" || !/^[a-z]+\/[a-z0-9-]{1,64}$/.test(code))
+    // Not an answer from Auth at all (a dropped connection, a timeout): try again.
+    return new SessionRefused("verification_failed", true);
+  return new SessionRefused(code, TRANSIENT_AUTH_CODES.has(code));
+}
+/**
+ * One line per reason per minute, with how many were refused since: enough to tell an
+ * expired session from a revoked one without letting a flood of bad cookies flood logs.
+ */
+const refusalLog = new Map<string, { at: number; count: number }>();
+export function logSessionRefused(refused: SessionRefused, now = Date.now()) {
+  const key = `${refused.status}:${refused.reason}`;
+  const entry = refusalLog.get(key);
+  if (entry && now - entry.at < 60_000) {
+    entry.count += 1;
+    return;
+  }
+  const since = entry && entry.count ? ` (${entry.count} more since the last report)` : "";
+  refusalLog.set(key, { at: now, count: 0 });
+  if (refused.status === 503) console.error(`OpenAMS session check unavailable: ${refused.reason}${since}.`);
+  else console.warn(`OpenAMS session refused: ${refused.reason}${since}.`);
+}
 const notFound = () =>
   new IdentityError(404, "not_found", "That item was not found.");
 
@@ -374,16 +425,26 @@ function bearer(request: Request): string {
  * MFA is required, that the session was created from a sign-in with a second factor.
  */
 async function verifySession(auth: BaseAuth, request: Request, requireMfa = false, allowSms = false): Promise<Identity> {
+  let token: string;
+  try {
+    token = bearer(request);
+  } catch {
+    throw new SessionRefused("missing_session");
+  }
   let decoded: DecodedIdToken;
   try {
-    decoded = await auth.verifySessionCookie(bearer(request), true);
-  } catch {
-    throw unauthorized();
+    decoded = await auth.verifySessionCookie(token, true);
+  } catch (error) {
+    throw authFailure(error);
   }
   if (decoded.email_verified !== true || typeof decoded.email !== "string")
-    throw unauthorized();
-  if (requireMfa && !secondFactorOf(decoded)) throw unauthorized();
-  await assertPhoneIdentity(auth, decoded, allowSms && !requireMfa);
+    throw new SessionRefused("email_unverified");
+  if (requireMfa && !secondFactorOf(decoded)) throw new SessionRefused("second_factor_missing");
+  try {
+    await assertPhoneIdentity(auth, decoded, allowSms && !requireMfa);
+  } catch (error) {
+    throw error instanceof IdentityError ? new SessionRefused("phone_identity") : authFailure(error);
+  }
   return { uid: decoded.uid, email: normalizeEmail(decoded.email) };
 }
 async function loadMembership(
@@ -418,11 +479,21 @@ export function createFirebaseAuthenticate(deps: {
     let identity: Identity;
     try {
       identity = await verifySession(deps.auth, request, requireMfa, allowSms);
+    } catch (error) {
+      const refused = authFailure(error);
+      logSessionRefused(refused);
+      response.status(refused.status).json({ error: refused.code, message: refused.message });
+      return;
+    }
+    // A failed read is not the person's session ending: don't sign them out for it.
+    try {
       membership = await loadMembership(deps.db, identity.uid);
     } catch {
-      response
-        .status(401)
-        .json({ error: "unauthorized", message: "Sign in again to continue." });
+      console.error("OpenAMS membership lookup failed.");
+      response.status(503).json({
+        error: "unavailable",
+        message: "Your agency membership couldn't be checked just now. Try again in a moment.",
+      });
       return;
     }
     if (!membership) {
@@ -643,7 +714,11 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         (response.locals as Locals).identity = identity;
         next();
       },
-      next,
+      (error: unknown) => {
+        const refused = authFailure(error);
+        logSessionRefused(refused);
+        next(refused);
+      },
     );
   };
   const requireMember =
