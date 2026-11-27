@@ -14,6 +14,7 @@ import {
   type AmsRecord,
   type Book,
 } from "./model";
+import { useSessionLive } from "./session-guard";
 
 export function TaskFollowUp({
   task,
@@ -279,7 +280,10 @@ export function ReminderQueue({
     },
     [load],
   );
+  // Paused while the session is away; picks up again with a fresh read when it's back.
+  const live = useSessionLive();
   useEffect(() => {
+    if (!live) return;
     const controller = new AbortController();
     void load(controller.signal)
       .then((all) => {
@@ -302,7 +306,7 @@ export function ReminderQueue({
       controller.abort();
       clearInterval(interval);
     };
-  }, [load, refresh, book.reminders]);
+  }, [load, refresh, book.reminders, live]);
   const active = rows
     .filter((r) => ["ready", "blocked"].includes(r.data.status))
     .sort(

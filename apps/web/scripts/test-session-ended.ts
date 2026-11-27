@@ -25,8 +25,14 @@ registerHooks({
   },
 });
 
-const { request, sessionEndReason, sameActor, SESSION_ENDED_EVENT, AgencyRequestError } =
-  await import("../src/features/agency/model");
+const {
+  request,
+  sessionEndReason,
+  sameActor,
+  checkSessionRecovery,
+  SESSION_ENDED_EVENT,
+  AgencyRequestError,
+} = await import("../src/features/agency/model");
 const { identityRequest } = await import("../src/features/agency/identity-model");
 
 // --- Which refusals end the session in this tab.
@@ -99,6 +105,26 @@ for (const [code, expected] of [
   await refusal(() => identityRequest("invitations"));
   assert.deepEqual(events, expected, `identity 401 ${code}`);
 }
+// --- Coming back: only the same person in the same agency resumes this tab, and the
+// check itself never announces the session ending again.
+const me = { userId: "u1", tenantId: "t1" };
+for (const [reply, expected] of [
+  [{ status: 401, body: { error: "unauthorized" } }, "waiting"],
+  [{ status: 503, body: {} }, "waiting"],
+  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t1", role: "admin" } } }, "resume"],
+  [{ status: 200, body: { actor: { userId: "u2", tenantId: "t1", role: "admin" } } }, "other_person"],
+  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t9", role: "admin" } } }, "other_person"],
+  [{ status: 200, body: { unexpected: true } }, "waiting"],
+] as const) {
+  events.length = 0;
+  answer = reply;
+  assert.equal(await checkSessionRecovery(me), expected, JSON.stringify(reply));
+  assert.deepEqual(events, []);
+}
+globalThis.fetch = (async () => {
+  throw new TypeError("network down");
+}) as typeof fetch;
+assert.equal(await checkSessionRecovery(me), "waiting");
 globalThis.fetch = realFetch;
 delete (globalThis as { window?: unknown }).window;
 

@@ -191,6 +191,23 @@ export function sameActor(
 ) {
   return Boolean(b) && a.userId === b!.userId && a.tenantId === b!.tenantId;
 }
+/**
+ * After a session ended: has this person come back? Asks the workspace session directly
+ * (not through request(), which would announce the ended session again).
+ * "resume": the same person and agency, so this tab can carry on as it is.
+ * "other_person": someone else is signed in now; nothing in this tab is theirs.
+ * "waiting": still signed out, or the check couldn't tell.
+ */
+export type SessionRecovery = "resume" | "other_person" | "waiting";
+export async function checkSessionRecovery(
+  actor: Pick<AmsActor, "userId" | "tenantId">,
+): Promise<SessionRecovery> {
+  const response = await fetch("/api/agency/session", { cache: "no-store" }).catch(() => null);
+  if (!response?.ok) return "waiting";
+  const next = (await response.json().catch(() => null)) as Partial<AgencySession> | null;
+  if (!next?.actor || typeof next.actor.userId !== "string") return "waiting";
+  return sameActor(actor, next.actor) ? "resume" : "other_person";
+}
 /** Used when a refusal carries no message of its own; the API's messages take precedence. */
 const STATUS_MESSAGES: Record<number, string> = {
   413: "This is more than your agency can store or send at once. Nothing was saved.",
