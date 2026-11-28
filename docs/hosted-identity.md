@@ -146,6 +146,14 @@ Firestore access to these collections; deny them in security rules.
   another active admin exists.
 - **Sign-out revokes all of the person's sessions**, because Firebase revocation is per
   user.
+- **Every request verifies the session and reads the membership**, so a revoked session,
+  a deactivated member or a changed role applies to the next request. This costs one
+  call to Firebase Auth and two document reads per request. `AMS_SESSION_CACHE_SECONDS`
+  (0 to 300, off by default) lets an instance trust a session it has verified for that
+  long instead. The trade: on instances that had already seen the session, a revocation,
+  deactivation or role change can take up to that long to apply. The instance that
+  handles the sign-out, deactivation or role change forgets that person at once, and a
+  remembered session never outlives the session's own expiry.
 
 ## Links that prefill sign-in and setup
 

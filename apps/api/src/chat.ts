@@ -56,8 +56,22 @@ export interface AmsChatStore {
     userId: string,
     sequence: number,
   ): Promise<void>;
+  /** A conversation's latest message and the reader's unread count, read together. */
+  summary(
+    tenantId: string,
+    conversation: string,
+    userId: string,
+  ): Promise<{ last: AmsChatMessage | null; unread: number }>;
+  /**
+   * A number that grows whenever anything a summary could show changes for this agency:
+   * a new message, or a read marker moving. Equal versions mean nothing changed, so a
+   * reader's summaries can be reused without reading every conversation again.
+   */
+  version(tenantId: string): Promise<number>;
 }
 
+/** How long chat routes reuse an agency's member list before reading it again. */
+const ROSTER_MS = 30_000;
 export const directConversation = (a: string, b: string) =>
   `direct:${[a, b].sort().join(":")}`;
 
@@ -204,6 +218,24 @@ export class SqliteAmsChat implements AmsChatStore {
       return Number(row?.n ?? 0);
     });
   }
+  async summary(tenant: string, conversation: string, userId: string) {
+    return {
+      last: await this.last(tenant, conversation),
+      unread: await this.unread(tenant, conversation, userId),
+    };
+  }
+  version(tenant: string) {
+    // Message sequences and read markers only ever grow, so their sum does too.
+    return this.run((db) =>
+      Number(
+        db
+          .prepare(
+            "SELECT (SELECT COALESCE(MAX(seq),0) FROM ams_chat_messages WHERE tenant=?) + (SELECT COALESCE(SUM(seq),0) FROM ams_chat_reads WHERE tenant=?) AS v",
+          )
+          .get(tenant, tenant)?.v ?? 0,
+      ),
+    );
+  }
   markRead(
     tenant: string,
     conversation: string,
@@ -260,9 +292,30 @@ export function mountChatRoutes(
     ) => RequestHandler;
   },
 ) {
+  // An open chat asks who is on the team every few seconds. Remember the answer briefly;
+  // when it would refuse someone or hide a teammate, ask again first, so a person who
+  // just joined is never turned away by a remembered list.
+  const rosters = new Map<string, { at: number; value: Promise<AmsMember[]> }>();
+  function roster(tenantId: string, fresh = false) {
+    const hit = rosters.get(tenantId);
+    if (!fresh && hit && Date.now() - hit.at < ROSTER_MS) return hit.value;
+    const value = members(tenantId);
+    if (rosters.size >= 5000) rosters.clear();
+    rosters.set(tenantId, { at: Date.now(), value });
+    value.catch(() => {
+      if (rosters.get(tenantId)?.value === value) rosters.delete(tenantId);
+    });
+    return value;
+  }
+  const isActive = (all: AmsMember[], actor: AmsActor) =>
+    all.some((member) => member.id === actor.userId && member.active);
+  // What each reader's last pulse showed, reused while the agency's chat version (and
+  // the team) is unchanged: an idle chat then costs a version read, not every thread.
+  const summaries = new Map<string, { version: number; team: string; threads: AmsChatPulse["threads"] }>();
   async function team(actor: AmsActor) {
-    const all = await members(actor.tenantId);
-    if (!all.some((member) => member.id === actor.userId && member.active))
+    let all = await roster(actor.tenantId);
+    if (!isActive(all, actor)) all = await roster(actor.tenantId, true);
+    if (!isActive(all, actor))
       throw new AmsError(
         403,
         "chat_members_only",
@@ -276,11 +329,16 @@ export function mountChatRoutes(
     actor: AmsActor,
     writing: boolean,
   ) {
-    const all = await team(actor);
+    let all = await team(actor);
     const memberId = request.params.memberId;
     if (memberId === undefined) return AMS_CHAT_TEAM;
     parseAms(AmsId, memberId);
-    const other = all.find((member) => member.id === memberId);
+    let other = all.find((member) => member.id === memberId);
+    // Before refusing, or before writing to someone, make sure the list is current.
+    if (memberId !== actor.userId && (!other || writing)) {
+      all = await roster(actor.tenantId, true);
+      other = all.find((member) => member.id === memberId);
+    }
     if (!other || other.id === actor.userId || (writing && !other.active))
       throw new AmsError(404, "not_found", "Teammate not found.");
     return directConversation(actor.userId, other.id);
@@ -296,20 +354,32 @@ export function mountChatRoutes(
       const others = all.filter(
         (member) => member.active && member.id !== actor.userId,
       );
-      const threads = await Promise.all(
-        [
-          { thread: AMS_CHAT_TEAM, key: AMS_CHAT_TEAM },
-          ...others.map((member) => ({
-            thread: amsChatDirectThread(member.id),
-            key: directConversation(actor.userId, member.id),
+      // Read the version before the threads: if something lands in between, the stored
+      // version is older than the threads and the next pulse simply reads them again.
+      const [version, seen] = await Promise.all([
+        chat.version(actor.tenantId),
+        chat.seen(actor.tenantId),
+      ]);
+      const reader = `${actor.tenantId}\n${actor.userId}`;
+      const teamKey = others.map((member) => member.id).join("\n");
+      const kept = summaries.get(reader);
+      let threads = kept?.version === version && kept.team === teamKey ? kept.threads : null;
+      if (!threads) {
+        threads = await Promise.all(
+          [
+            { thread: AMS_CHAT_TEAM, key: AMS_CHAT_TEAM },
+            ...others.map((member) => ({
+              thread: amsChatDirectThread(member.id),
+              key: directConversation(actor.userId, member.id),
+            })),
+          ].map(async ({ thread, key }) => ({
+            thread,
+            ...(await chat.summary(actor.tenantId, key, actor.userId)),
           })),
-        ].map(async ({ thread, key }) => ({
-          thread,
-          last: await chat.last(actor.tenantId, key),
-          unread: await chat.unread(actor.tenantId, key, actor.userId),
-        })),
-      );
-      const seen = await chat.seen(actor.tenantId);
+        );
+        if (summaries.size >= 20_000) summaries.clear();
+        summaries.set(reader, { version, team: teamKey, threads });
+      }
       const ids = new Set(all.filter((m) => m.active).map((m) => m.id));
       response.json({
         now,

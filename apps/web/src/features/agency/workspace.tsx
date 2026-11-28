@@ -74,6 +74,7 @@ import { AccountDraftProvider } from "./account-drafts";
 import { AgencyProfileForm, workspaceRecord } from "./agency-profile";
 import { AgencyEditor, type EditIntent } from "./editor";
 import { TeamChatProvider } from "./team-chat";
+import { SessionGuard } from "./session-guard";
 import { TeamPage } from "./team";
 import { PageHeader } from "./page-header";
 import { SuggestionBox } from "./suggestions";
@@ -122,18 +123,28 @@ import "./themes/brand.css";
 import "./picker.css";
 import "./team-chat.css";
 
-/** Per-person state: account drafts and team chat start over when the person changes. */
+/**
+ * Per-person state: account drafts and team chat start over when the person changes.
+ * The session guard sits outside them, so an ended session pauses them without
+ * discarding anything.
+ */
 function WorkspaceProviders({
   session,
+  hosted,
+  onResume,
   children,
 }: {
   session: AgencySession;
+  hosted: boolean;
+  onResume: () => void;
   children: ReactNode;
 }) {
   return (
-    <AccountDraftProvider>
-      <TeamChatProvider session={session}>{children}</TeamChatProvider>
-    </AccountDraftProvider>
+    <SessionGuard session={session} hosted={hosted} onResume={onResume}>
+      <AccountDraftProvider>
+        <TeamChatProvider session={session}>{children}</TeamChatProvider>
+      </AccountDraftProvider>
+    </SessionGuard>
   );
 }
 import "./hosted-identity.css";
@@ -671,6 +682,8 @@ export function AgencyWorkspace({
     <WorkspaceProviders
       key={`${session.actor.tenantId}:${session.actor.userId}:${session.actor.role}`}
       session={session}
+      hosted={Boolean(hosted)}
+      onResume={() => void refresh()}
     >
       <div className="agency-app" data-brand={brand}>
         <a href="#agency-main" className="agency-skip">

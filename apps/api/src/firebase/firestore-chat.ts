@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { DocumentReference, Firestore } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import { AmsId, type AmsChatMessage } from "@openams/contracts";
 import type { AmsChatStore } from "../chat.js";
 import { AmsError } from "../repository.js";
@@ -24,6 +24,10 @@ const readMessage = (value: unknown): AmsChatMessage =>
  * One agency's hosted chat. Message IDs are unique across its conversations;
  * sequence numbers are contiguous within a conversation. A transaction writes
  * the immutable message, retry receipt and latest position together.
+ *
+ * Presence for the whole agency is one document, and one counter document records
+ * that something changed, so an idle agency costs a reader two document reads per
+ * check instead of several per teammate.
  *
  * Threads are opaque document keys. Messages page by a unique sequence field and unread
  * counts use a single-field author/sequence range, so no composite index or
@@ -56,26 +60,43 @@ export class FirestoreAmsChat implements AmsChatStore {
       .collection("chat_threads")
       .doc(`h_${hash(conversation)}`);
   }
+  /** Agency-wide chat state: "presence" (member id to last seen) and "version". */
+  private state(tenantId: string, name: "presence" | "version") {
+    return this.agency(tenantId).collection("chat_state").doc(name);
+  }
   async touch(tenantId: string, userId: string, at: string) {
-    const ref = this.agency(tenantId)
-      .collection("chat_presence")
-      .doc(id(userId));
-    await this.db.runTransaction(async (tx) => {
-      const previous = await tx.get(ref);
-      if (!previous.exists || String(previous.get("at")) < at)
-        tx.set(ref, { id: userId, at });
-    });
+    const ref = this.state(tenantId, "presence");
+    const key = id(userId);
+    // Not a transaction: everyone in the agency writes this document every few seconds,
+    // and the worst a race can do is keep a timestamp a moment older than the newest.
+    const previous = (await ref.get()).get("seen") as Record<string, string> | undefined;
+    if (!previous?.[key] || previous[key] < at)
+      await ref.set({ seen: { [key]: at } }, { merge: true });
   }
   async seen(tenantId: string) {
-    const snapshot = await this.agency(tenantId)
-      .collection("chat_presence")
-      .get();
+    const seen = ((await this.state(tenantId, "presence").get()).get("seen") ?? {}) as Record<string, unknown>;
     return Object.fromEntries(
-      snapshot.docs.map((doc) => [
-        String(doc.get("id")),
-        String(doc.get("at")),
-      ]),
+      Object.entries(seen).map(([key, at]) => [key.slice(2), String(at)]),
     );
+  }
+  async version(tenantId: string) {
+    return Number((await this.state(tenantId, "version").get()).get("n") ?? 0);
+  }
+  async summary(tenantId: string, conversation: string, userId: string) {
+    const thread = this.thread(tenantId, conversation);
+    const [position, read] = await this.db.getAll(
+      thread,
+      thread.collection("chat_reads").doc(id(userId)),
+    );
+    return {
+      last: position!.exists ? readMessage(position!.get("last")) : null,
+      unread: await this.unreadFrom(
+        thread,
+        userId,
+        Number(position!.get("sequence") ?? 0),
+        Number(read!.get("sequence") ?? 0),
+      ),
+    };
   }
   async post(
     tenantId: string,
@@ -114,6 +135,7 @@ export class FirestoreAmsChat implements AmsChatStore {
       });
       tx.create(receipt, { conversation, value });
       tx.set(thread, { sequence, last: value });
+      tx.set(this.state(tenantId, "version"), { n: FieldValue.increment(1) }, { merge: true });
       return saved;
     });
   }
@@ -153,8 +175,16 @@ export class FirestoreAmsChat implements AmsChatStore {
       thread,
       thread.collection("chat_reads").doc(id(userId)),
     );
-    const latest = Number(position!.get("sequence") ?? 0);
-    const marker = Math.min(latest, Number(read!.get("sequence") ?? 0));
+    return this.unreadFrom(
+      thread,
+      userId,
+      Number(position!.get("sequence") ?? 0),
+      Number(read!.get("sequence") ?? 0),
+    );
+  }
+  /** Other people's messages after the marker; counts only when there could be any. */
+  private async unreadFrom(thread: DocumentReference, userId: string, latest: number, read: number) {
+    const marker = Math.min(latest, read);
     if (latest <= marker) return 0;
     const author = hash(userId);
     const own = await thread
@@ -177,8 +207,10 @@ export class FirestoreAmsChat implements AmsChatStore {
     await this.db.runTransaction(async (tx) => {
       const [position, read] = await tx.getAll(thread, ref);
       const next = Math.min(sequence, Number(position!.get("sequence") ?? 0));
-      if (next > Number(read!.get("sequence") ?? 0))
+      if (next > Number(read!.get("sequence") ?? 0)) {
         tx.set(ref, { sequence: next });
+        tx.set(this.state(tenantId, "version"), { n: FieldValue.increment(1) }, { merge: true });
+      }
     });
   }
 }

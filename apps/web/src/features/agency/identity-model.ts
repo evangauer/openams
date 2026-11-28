@@ -1,5 +1,5 @@
 import type { AmsMember } from "@openams/contracts";
-import { AgencyRequestError } from "./model";
+import { AgencyRequestError, announceSessionEnded } from "./model";
 
 export type IdentityRole = AmsMember["role"];
 export const IDENTITY_ROLES: IdentityRole[] = [
@@ -69,6 +69,10 @@ export async function identityRequest<T>(
     cache: "no-store",
   });
   const value = await response.json().catch(() => ({}));
+  // Sign-in steps answer 401 with their own codes (mfa_required, …); only a refused
+  // session means the workspace's session ended.
+  if (response.status === 401 && value.error === "unauthorized")
+    announceSessionEnded("signed_out");
   if (!response.ok)
     throw new AgencyRequestError(
       response.status,

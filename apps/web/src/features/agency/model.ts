@@ -20,6 +20,8 @@ export interface AgencySession {
   /** Hosted forms are available; publishing may still be off (the public demo). */
   formsEnabled?: boolean;
   formPublishingEnabled?: boolean;
+  /** Seconds until this sign-in session expires, where sessions do (hosted sign-in). */
+  sessionSecondsLeft?: number;
   /** Team chat and presence are available in this environment. */
   chatEnabled?: boolean;
   calendarConfigured?: boolean;
@@ -160,6 +162,67 @@ export class AgencyRequestError extends Error {
     super(message);
   }
 }
+/**
+ * Raised on window when a workspace request shows the person can't continue in this tab:
+ * their session ended (401), or their membership of the agency did (403). The workspace
+ * pauses background work and explains, instead of each feature retrying on its own.
+ */
+export const SESSION_ENDED_EVENT = "openams:session-ended";
+export type SessionEndReason = "signed_out" | "access_ended";
+export interface SessionEndedDetail {
+  reason: SessionEndReason;
+}
+/** Why a refusal ends the session in this tab, or null when it doesn't. */
+export function sessionEndReason(status: number, code: string): SessionEndReason | null {
+  if (status === 401) return "signed_out";
+  if (status === 403 && (code === "membership_inactive" || code === "agency_required"))
+    return "access_ended";
+  return null;
+}
+/** Tells the workspace a request was refused because the session ended. */
+export function announceSessionEnded(reason: SessionEndReason) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<SessionEndedDetail>(SESSION_ENDED_EVENT, { detail: { reason } }),
+  );
+}
+/** A signed-in person coming back is the same one only with the same agency. */
+export function sameActor(
+  a: Pick<AmsActor, "userId" | "tenantId">,
+  b: Pick<AmsActor, "userId" | "tenantId"> | null | undefined,
+) {
+  return Boolean(b) && a.userId === b!.userId && a.tenantId === b!.tenantId;
+}
+/**
+ * After a session ended: has this person come back? Asks the workspace session directly
+ * (not through request(), which would announce the ended session again).
+ * "resume": the same person and agency, so this tab can carry on as it is.
+ * "other_person": someone else is signed in now; nothing in this tab is theirs.
+ * "signed_out": the session (or membership) is refused.
+ * "unknown": the check couldn't tell (offline, service unavailable); ask again later.
+ */
+export type SessionRecovery =
+  | { kind: "resume"; secondsLeft?: number }
+  | { kind: "other_person" | "signed_out" | "unknown" };
+export async function checkSessionRecovery(
+  actor: Pick<AmsActor, "userId" | "tenantId">,
+): Promise<SessionRecovery> {
+  const response = await fetch("/api/agency/session", { cache: "no-store" }).catch(() => null);
+  if (!response) return { kind: "unknown" };
+  const next = (await response.json().catch(() => null)) as
+    | (Partial<AgencySession> & { error?: string; code?: string })
+    | null;
+  if (!response.ok)
+    return {
+      kind: sessionEndReason(response.status, next?.error || next?.code || "") ? "signed_out" : "unknown",
+    };
+  if (!next?.actor || typeof next.actor.userId !== "string") return { kind: "unknown" };
+  if (!sameActor(actor, next.actor)) return { kind: "other_person" };
+  return {
+    kind: "resume",
+    ...(typeof next.sessionSecondsLeft === "number" ? { secondsLeft: next.sessionSecondsLeft } : {}),
+  };
+}
 /** Used when a refusal carries no message of its own; the API's messages take precedence. */
 const STATUS_MESSAGES: Record<number, string> = {
   413: "This is more than your agency can store or send at once. Nothing was saved.",
@@ -177,12 +240,16 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     window.dispatchEvent(
       new CustomEvent(ACCESS_REFUSED_EVENT, { detail: { code: value.error, message: value.message } }),
     );
-  if (!response.ok)
+  if (!response.ok) {
+    const code = value.error || value.code || "request_failed";
+    const ended = sessionEndReason(response.status, code);
+    if (ended) announceSessionEnded(ended);
     throw new AgencyRequestError(
       response.status,
-      value.error || value.code || "request_failed",
+      code,
       value.message || STATUS_MESSAGES[response.status] || value.error || "The request failed.",
     );
+  }
   return value as T;
 }
 export async function command(input: AmsCommand) {

@@ -21,6 +21,20 @@ import {
 } from "@openams/contracts";
 import { human, request, type AgencySession, type AmsMember } from "./model";
 import { initialsOf } from "./picker";
+import { useSessionLive } from "./session-guard";
+import {
+  CONVERSATION_MAX_MS,
+  CONVERSATION_POLL_MS,
+  CONVERSATION_QUIET_MS,
+  conversationInterval,
+  PULSE_HIDDEN_MS,
+  PULSE_MAX_MS,
+  PULSE_VISIBLE_MS,
+  chatFailure,
+  retryDelay,
+  undeliveredLabel,
+  type ChatFailure,
+} from "./team-chat-model";
 
 /** Seen within this long counts as online; an open tab checks in every 15 seconds. */
 const ONLINE_MS = 45_000;
@@ -95,6 +109,7 @@ export function TeamChatProvider({
   children: ReactNode;
 }) {
   const enabled = Boolean(session.chatEnabled);
+  const live = useSessionLive();
   const me = session.actor.userId;
   const [pulse, setPulse] = useState<AmsChatPulse | null>(null);
   const [clock, setClock] = useState(0);
@@ -116,37 +131,60 @@ export function TeamChatProvider({
     });
   }, []);
 
-  const refresh = useCallback(async () => {
-    try {
-      const value = await request<AmsChatPulse>(
-        "chat/pulse",
-        json({ active: document.visibilityState === "visible" }),
-      );
-      offset.current = Date.parse(value.now) - Date.now();
-      setPulse(value);
-      setClock(Date.now());
-    } catch {
-      // Chat is a convenience; the next beat tries again.
-    }
+  // One pulse at a time: tab switches and sends that ask while one is on its way share it.
+  const inFlight = useRef<Promise<void> | null>(null);
+  const failures = useRef(0);
+  const refresh = useCallback(() => {
+    inFlight.current ??= (async () => {
+      try {
+        const value = await request<AmsChatPulse>(
+          "chat/pulse",
+          json({ active: document.visibilityState === "visible" }),
+        );
+        offset.current = Date.parse(value.now) - Date.now();
+        failures.current = 0;
+        setPulse(value);
+        setClock(Date.now());
+      } catch {
+        // Chat is a convenience: back off and try again. An ended session pauses it
+        // (the workspace explains) until the person is back.
+        failures.current += 1;
+      } finally {
+        inFlight.current = null;
+      }
+    })();
+    return inFlight.current;
   }, []);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !live) return;
     let timer: number | undefined;
-    const beat = () => {
+    let stopped = false;
+    // Only the latest beat schedules the next one, so overlapping beats leave one timer.
+    let latest = 0;
+    const beat = async () => {
       window.clearTimeout(timer);
-      void refresh();
+      const mine = ++latest;
+      await refresh();
+      if (stopped || mine !== latest) return;
+      const visible = document.visibilityState === "visible";
       timer = window.setTimeout(
         beat,
-        document.visibilityState === "visible" ? 15_000 : 60_000,
+        Math.max(
+          visible ? 0 : PULSE_HIDDEN_MS,
+          retryDelay(PULSE_VISIBLE_MS, failures.current, PULSE_MAX_MS),
+        ),
       );
     };
-    beat();
-    document.addEventListener("visibilitychange", beat);
+    // Showing or hiding the tab reports presence straight away.
+    const changed = () => void beat();
+    void beat();
+    document.addEventListener("visibilitychange", changed);
     return () => {
+      stopped = true;
       window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", beat);
+      document.removeEventListener("visibilitychange", changed);
     };
-  }, [enabled, refresh]);
+  }, [enabled, live, refresh]);
 
   const markRead = useCallback((thread: string, sequence: number) => {
     setPulse(
@@ -495,6 +533,8 @@ interface Pending {
   id: string;
   body: string;
   failed: boolean;
+  /** Why the last try didn't go through, shown under the message. */
+  problem?: string;
 }
 type UpdateOutbox = (thread: string, update: (current: Pending[]) => Pending[]) => void;
 
@@ -528,8 +568,23 @@ function Conversation({
     updateOutbox(thread, update);
   }, [thread, updateOutbox]);
   const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ChatFailure | null>(null);
   const [more, setMore] = useState(false);
+  const live = useSessionLive();
+  const liveNow = useRef(live);
+  liveNow.current = live;
+  // Kept across pauses, so resuming asks only for what arrived meanwhile.
+  const latest = useRef(0);
+  const firstPage = useRef(true);
+  // The last sign of life here: a message arriving, typing or sending. A quiet
+  // conversation is checked less often; `wake` makes it quick again at once.
+  const activity = useRef(Date.now());
+  const wake = useRef<(() => void) | null>(null);
+  const stir = useCallback(() => {
+    const wasQuiet = Date.now() - activity.current >= CONVERSATION_QUIET_MS;
+    activity.current = Date.now();
+    if (wasQuiet) wake.current?.();
+  }, []);
   const [draft, setDraft] = useState(drafts[thread] ?? "");
   const log = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -549,37 +604,69 @@ function Conversation({
     );
   }, [setPending]);
 
-  // Load the latest page, then check for new messages every few seconds.
+  // Load the latest page, then check for new messages every few seconds while the tab
+  // is in view: one request at a time, backing off while it fails, and stopping when
+  // the conversation is gone or the session ended (it resumes when the session is back).
   useEffect(() => {
+    if (!live) return;
     let alive = true;
-    let latest = 0;
-    let firstPage = true;
-    const load = async () => {
+    let busy = false;
+    let failures = 0;
+    let timer: number | undefined;
+    const load = async (always = false) => {
+      window.clearTimeout(timer);
+      if (!alive || busy) return;
+      if (!always && document.visibilityState !== "visible") return;
+      busy = true;
       try {
+        const after = latest.current;
         const history = await request<AmsChatHistory>(
-          `${path}/messages${latest ? `?after=${latest}` : ""}`,
+          `${path}/messages${after ? `?after=${after}` : ""}`,
         );
         if (!alive) return;
-        if (firstPage) setMore(history.messages.length >= 50);
-        firstPage = false;
+        if (firstPage.current) setMore(history.messages.length >= 50);
+        firstPage.current = false;
         setLoaded(true);
-        setFailed(false);
+        setFailure(null);
+        failures = 0;
         const top = history.messages.at(-1)?.sequence;
-        if (top) latest = Math.max(latest, top);
+        if (top) latest.current = Math.max(latest.current, top);
+        if (history.messages.length) activity.current = Date.now();
         merge(history.messages);
-      } catch {
-        if (alive) setFailed(true);
+        timer = window.setTimeout(
+          () => void load(),
+          conversationInterval(Date.now() - activity.current),
+        );
+      } catch (error) {
+        if (!alive) return;
+        const kind = chatFailure(error);
+        setFailure(kind);
+        if (kind !== "offline") return;
+        failures += 1;
+        timer = window.setTimeout(
+          () => void load(),
+          retryDelay(CONVERSATION_POLL_MS, failures, CONVERSATION_MAX_MS),
+        );
+      } finally {
+        busy = false;
       }
     };
-    void load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, 3_000);
+    // Coming back to the tab looks straight away instead of waiting for the next turn.
+    const shown = () => {
+      if (document.visibilityState !== "visible") return;
+      activity.current = Date.now();
+      void load();
+    };
+    wake.current = () => void load();
+    void load(true);
+    document.addEventListener("visibilitychange", shown);
     return () => {
       alive = false;
-      window.clearInterval(timer);
+      wake.current = null;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", shown);
     };
-  }, [path, merge]);
+  }, [path, merge, live]);
 
   // Reading the thread marks it read.
   useEffect(() => {
@@ -621,13 +708,22 @@ function Conversation({
         (log.current?.scrollHeight ?? 0) - (log.current?.scrollTop ?? 0);
       setMore(history.messages.length >= 50);
       merge(history.messages);
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailure(chatFailure(error));
     }
   }
   async function deliver(id: string, body: string) {
+    const fail = (problem: string) =>
+      setPending((list) =>
+        list.map((p) => (p.id === id ? { ...p, failed: true, problem } : p)),
+      );
+    // Signed out: keep it here, unsent, for the person to send once they're back.
+    if (!liveNow.current) {
+      fail(undeliveredLabel("paused"));
+      return;
+    }
     setPending((list) =>
-      list.map((p) => (p.id === id ? { ...p, failed: false } : p)),
+      list.map((p) => (p.id === id ? { ...p, failed: false, problem: undefined } : p)),
     );
     try {
       const saved = await request<AmsChatMessage>(
@@ -638,9 +734,12 @@ function Conversation({
       sent(thread, saved);
       readSent.current = Math.max(readSent.current, saved.sequence);
       void refresh();
-    } catch {
-      setPending((list) =>
-        list.map((p) => (p.id === id ? { ...p, failed: true } : p)),
+    } catch (error) {
+      fail(
+        undeliveredLabel(
+          chatFailure(error),
+          error instanceof Error ? error.message : undefined,
+        ),
       );
     }
   }
@@ -651,6 +750,7 @@ function Conversation({
     setDraft("");
     drafts[thread] = "";
     stick.current = true;
+    stir();
     setPending((list) => [...list, { id, body, failed: false }]);
     void deliver(id, body);
   }
@@ -750,8 +850,21 @@ function Conversation({
             )}
           </div>
         )}
-        {!loaded && !failed && <p className="team-chat-note">Loading…</p>}
-        {failed && (
+        {!loaded && !failure && live && (
+          <p className="team-chat-note">Loading…</p>
+        )}
+        {(!live || failure === "paused") && (
+          <p className="team-chat-note" role="status">
+            Chat is paused while you&rsquo;re signed out. New messages appear
+            here once you&rsquo;re back.
+          </p>
+        )}
+        {live && failure === "rejected" && (
+          <p className="team-chat-note" role="status">
+            This conversation isn&rsquo;t available.
+          </p>
+        )}
+        {live && failure === "offline" && (
           <p className="team-chat-note" role="status">
             Can&rsquo;t reach chat right now. Trying again…
           </p>
@@ -795,6 +908,7 @@ function Conversation({
           onChange={(event) => {
             setDraft(event.target.value);
             drafts[thread] = event.target.value;
+            stir();
           }}
           onKeyDown={(event) => {
             if (
@@ -865,7 +979,7 @@ function MessageRow({
         <p className="team-chat-body">{message?.body ?? pending?.body}</p>
         {pending?.failed && (
           <p className="team-chat-failed" role="alert">
-            Delivery unconfirmed.{" "}
+            {pending.problem ?? "Delivery unconfirmed."}{" "}
             <button type="button" onClick={retry}>
               Try again
             </button>

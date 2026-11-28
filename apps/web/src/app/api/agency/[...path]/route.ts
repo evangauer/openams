@@ -92,10 +92,27 @@ async function proxy(
             "Retry-After": check.headers.get("retry-after") || "10",
           },
         });
-      if (!check || !check.ok)
+      // A refused membership (403) keeps the API's reason, so the workspace can tell
+      // an ended membership from a role that can't upload.
+      if (check?.status === 403)
+        return new Response(check.body, {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+        });
+      // Only a refused session signs the person out. The API being unreachable or
+      // failing is not their session ending: nothing was read, so retrying is safe.
+      if (check?.status === 401)
         return NextResponse.json(
           { error: "unauthorized", message: "Sign in again to continue." },
-          { status: check?.status === 403 ? 403 : 401 },
+          { status: 401 },
+        );
+      if (!check || !check.ok)
+        return NextResponse.json(
+          {
+            error: "unavailable",
+            message: "The agency service is unavailable. Nothing was uploaded; try again.",
+          },
+          { status: 503 },
         );
     }
     const reader = request.body?.getReader();

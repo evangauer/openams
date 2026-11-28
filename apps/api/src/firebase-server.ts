@@ -23,6 +23,8 @@ import {
   createIdentityRouter,
   signupModeFromEnv,
   firestoreMembers,
+  SessionCache,
+  sessionCacheSecondsFromEnv,
   firestoreTimeZone,
   firestoreWorkspaceName,
 } from "./firebase/identity.js";
@@ -163,10 +165,13 @@ const accessControl = createAccessControl({
   enabled: accessConfig.enabled,
   actor: (response) => response.locals.amsActor as AmsActor | undefined,
 });
+// Off unless AMS_SESSION_CACHE_SECONDS is set (docs/hosted-identity.md).
+const sessions = new SessionCache(sessionCacheSecondsFromEnv());
 app.use(
   createIdentityRouter({
     auth,
     db,
+    sessions,
     appCheck,
     access:
       accessConfig.enabled && appOrigin
@@ -217,7 +222,7 @@ app.use(
   }),
 );
 const authenticateWithLimit = rateLimitedAuthenticate(
-  createFirebaseAuthenticate({ auth, db }),
+  createFirebaseAuthenticate({ auth, db, sessions }),
   (response) => (response.locals.amsActor as AmsActor | undefined)?.userId,
   new TokenBuckets({ capacity: 200, refillPerSecond: 5 }),
 );
@@ -259,6 +264,10 @@ app.use(
       agencyWrites,
     ),
     actor: (request) => request.res!.locals.amsActor as AmsActor,
+    sessionSecondsLeft: (request) => {
+      const expiresAt = request.res!.locals.amsSessionExpiresAt as number | undefined;
+      return typeof expiresAt === "number" ? Math.max(0, Math.floor(expiresAt - Date.now() / 1000)) : undefined;
+    },
     enabled: async () => true,
     repository: () => repository,
     files,
