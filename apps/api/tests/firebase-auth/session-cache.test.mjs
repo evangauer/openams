@@ -6,10 +6,12 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { createFirebaseAuthenticate, createIdentityRouter, SessionCache } from "../../dist/firebase/identity.js";
+import { requestLimitOptions } from "../../dist/firebase/rate-limit.js";
 
 const PROJECT = "demo-openams-auth";
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST;
@@ -63,9 +65,11 @@ before(async () => {
   web.use(express.json());
   web.use(createIdentityRouter({ auth, db, sessions: first }));
   const whoami = (_request, response) => response.json({ actor: response.locals.amsActor, expiresAt: response.locals.amsSessionExpiresAt });
-  web.get("/first/whoami", createFirebaseAuthenticate({ auth: counting, db, sessions: first }), whoami);
-  web.get("/second/whoami", createFirebaseAuthenticate({ auth: counting, db, sessions: second }), whoami);
-  web.get("/always/whoami", createFirebaseAuthenticate({ auth: counting, db }), whoami);
+  // Rate-limited like every /ams route, ahead of the same authenticate.
+  const limited = () => rateLimit(requestLimitOptions(200));
+  web.get("/first/whoami", limited(), createFirebaseAuthenticate({ auth: counting, db, sessions: first }), whoami);
+  web.get("/second/whoami", limited(), createFirebaseAuthenticate({ auth: counting, db, sessions: second }), whoami);
+  web.get("/always/whoami", limited(), createFirebaseAuthenticate({ auth: counting, db }), whoami);
   server = web.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   url = `http://127.0.0.1:${server.address().port}`;
