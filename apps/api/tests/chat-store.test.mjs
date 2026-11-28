@@ -160,4 +160,41 @@ test(`${backend}: chat pagination, unread markers and presence survive replay wi
   await store.touch("agency", "alice", at);
   assert.equal((await store.seen("agency")).alice, "2026-11-12T01:10:00.000Z");
   assert.deepEqual(await store.seen("other-agency"), {});
+  await store.touch("agency", "bob", at);
+  assert.deepEqual(await store.seen("agency"), { alice: "2026-11-12T01:10:00.000Z", bob: at });
+});
+
+test(`${backend}: chat summaries match last and unread, and the version moves only when they could change`, async (t) => {
+  const { store } = await fixture(t);
+  assert.equal(await store.version("agency"), 0);
+  assert.deepEqual(await store.summary("agency", "team", "alice"), { last: null, unread: 0 });
+  const versions = [0];
+  const moved = async (expected, why) => {
+    const next = await store.version("agency");
+    assert.equal(next > versions.at(-1), expected, why);
+    versions.push(next);
+  };
+  const first = message("alice", "Fictional first");
+  const one = await store.post("agency", "team", first);
+  await moved(true, "a new message");
+  await store.post("agency", "team", first);
+  await moved(false, "a retried message");
+  const two = await store.post("agency", "direct:alice:bob", message("alice", "Fictional note"));
+  await moved(true, "a message in another conversation");
+  for (const [conversation, reader] of [["team", "alice"], ["team", "bob"], ["direct:alice:bob", "bob"], ["empty", "bob"]])
+    assert.deepEqual(await store.summary("agency", conversation, reader), {
+      last: await store.last("agency", conversation),
+      unread: await store.unread("agency", conversation, reader),
+    });
+  assert.deepEqual(await store.summary("agency", "team", "bob"), { last: one, unread: 1 });
+  assert.deepEqual(await store.summary("agency", "direct:alice:bob", "alice"), { last: two, unread: 0 });
+  await store.markRead("agency", "team", "bob", one.sequence);
+  await moved(true, "a read marker moving");
+  assert.equal((await store.summary("agency", "team", "bob")).unread, 0);
+  await store.markRead("agency", "team", "bob", one.sequence);
+  await store.markRead("agency", "team", "bob", 0);
+  await moved(false, "a read marker that didn't move");
+  await store.touch("agency", "bob", at);
+  await moved(false, "presence");
+  assert.equal(await store.version("other-agency"), 0);
 });

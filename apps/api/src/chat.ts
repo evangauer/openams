@@ -56,6 +56,18 @@ export interface AmsChatStore {
     userId: string,
     sequence: number,
   ): Promise<void>;
+  /** A conversation's latest message and the reader's unread count, read together. */
+  summary(
+    tenantId: string,
+    conversation: string,
+    userId: string,
+  ): Promise<{ last: AmsChatMessage | null; unread: number }>;
+  /**
+   * A number that grows whenever anything a summary could show changes for this agency:
+   * a new message, or a read marker moving. Equal versions mean nothing changed, so a
+   * reader's summaries can be reused without reading every conversation again.
+   */
+  version(tenantId: string): Promise<number>;
 }
 
 export const directConversation = (a: string, b: string) =>
@@ -203,6 +215,24 @@ export class SqliteAmsChat implements AmsChatStore {
         );
       return Number(row?.n ?? 0);
     });
+  }
+  async summary(tenant: string, conversation: string, userId: string) {
+    return {
+      last: await this.last(tenant, conversation),
+      unread: await this.unread(tenant, conversation, userId),
+    };
+  }
+  version(tenant: string) {
+    // Message sequences and read markers only ever grow, so their sum does too.
+    return this.run((db) =>
+      Number(
+        db
+          .prepare(
+            "SELECT (SELECT COALESCE(MAX(seq),0) FROM ams_chat_messages WHERE tenant=?) + (SELECT COALESCE(SUM(seq),0) FROM ams_chat_reads WHERE tenant=?) AS v",
+          )
+          .get(tenant, tenant)?.v ?? 0,
+      ),
+    );
   }
   markRead(
     tenant: string,
