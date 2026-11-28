@@ -34,6 +34,9 @@ const {
   AgencyRequestError,
 } = await import("../src/features/agency/model");
 const { identityRequest } = await import("../src/features/agency/identity-model");
+const { SESSION_WARNING_MS, sessionPhase, nextPhaseCheck, recoveryDelay } = await import(
+  "../src/features/agency/session-guard-model"
+);
 
 // --- Which refusals end the session in this tab.
 assert.equal(sessionEndReason(401, "unauthorized"), "signed_out");
@@ -109,22 +112,40 @@ for (const [code, expected] of [
 // check itself never announces the session ending again.
 const me = { userId: "u1", tenantId: "t1" };
 for (const [reply, expected] of [
-  [{ status: 401, body: { error: "unauthorized" } }, "waiting"],
-  [{ status: 503, body: {} }, "waiting"],
-  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t1", role: "admin" } } }, "resume"],
-  [{ status: 200, body: { actor: { userId: "u2", tenantId: "t1", role: "admin" } } }, "other_person"],
-  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t9", role: "admin" } } }, "other_person"],
-  [{ status: 200, body: { unexpected: true } }, "waiting"],
+  [{ status: 401, body: { error: "unauthorized" } }, { kind: "signed_out" }],
+  [{ status: 403, body: { error: "membership_inactive" } }, { kind: "signed_out" }],
+  [{ status: 503, body: {} }, { kind: "unknown" }],
+  [{ status: 429, body: { error: "rate_limited" } }, { kind: "unknown" }],
+  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t1", role: "admin" } } }, { kind: "resume" }],
+  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t1", role: "admin" }, sessionSecondsLeft: 1200 } }, { kind: "resume", secondsLeft: 1200 }],
+  [{ status: 200, body: { actor: { userId: "u2", tenantId: "t1", role: "admin" } } }, { kind: "other_person" }],
+  [{ status: 200, body: { actor: { userId: "u1", tenantId: "t9", role: "admin" } } }, { kind: "other_person" }],
+  [{ status: 200, body: { unexpected: true } }, { kind: "unknown" }],
 ] as const) {
   events.length = 0;
   answer = reply;
-  assert.equal(await checkSessionRecovery(me), expected, JSON.stringify(reply));
+  assert.deepEqual(await checkSessionRecovery(me), expected, JSON.stringify(reply));
   assert.deepEqual(events, []);
 }
 globalThis.fetch = (async () => {
   throw new TypeError("network down");
 }) as typeof fetch;
-assert.equal(await checkSessionRecovery(me), "waiting");
+assert.deepEqual(await checkSessionRecovery(me), { kind: "unknown" });
+
+// --- A session of known length: warn before the end, check at the end, back off after.
+assert.equal(sessionPhase(8 * 3600_000), "ok");
+assert.equal(sessionPhase(SESSION_WARNING_MS + 1), "ok");
+assert.equal(sessionPhase(SESSION_WARNING_MS), "ending");
+assert.equal(sessionPhase(1), "ending");
+assert.equal(sessionPhase(0), "due");
+assert.equal(sessionPhase(-60_000), "due");
+// The next look lands on the next boundary, and always moves forward.
+assert.equal(nextPhaseCheck(8 * 3600_000), 8 * 3600_000 - SESSION_WARNING_MS);
+assert.equal(nextPhaseCheck(SESSION_WARNING_MS + 10), 1_000);
+assert.equal(nextPhaseCheck(120_000), 120_000);
+assert.equal(nextPhaseCheck(200), 1_000);
+assert.equal(nextPhaseCheck(-5), 10_000);
+assert.deepEqual([0, 1, 2, 3, 4, 99].map(recoveryDelay), [10_000, 20_000, 40_000, 60_000, 60_000, 60_000]);
 globalThis.fetch = realFetch;
 delete (globalThis as { window?: unknown }).window;
 

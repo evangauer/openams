@@ -5,6 +5,17 @@ export const CONVERSATION_POLL_MS = 3_000;
 /** Presence and unread counts, while the tab is in view and while it isn't. */
 export const PULSE_VISIBLE_MS = 15_000;
 export const PULSE_HIDDEN_MS = 60_000;
+/**
+ * A conversation nobody has touched for a while is checked less often. Any sign of life
+ * (a message arriving, typing, sending, coming back to the tab) makes it quick again,
+ * so the slower pace is only ever felt by the first message into a quiet conversation.
+ */
+export const CONVERSATION_QUIET_MS = 2 * 60_000;
+export const CONVERSATION_DORMANT_MS = 10 * 60_000;
+export function conversationInterval(idleMs: number) {
+  if (idleMs < CONVERSATION_QUIET_MS) return CONVERSATION_POLL_MS;
+  return idleMs < CONVERSATION_DORMANT_MS ? 6_000 : 10_000;
+}
 /** Failing requests back off to at most this. */
 export const CONVERSATION_MAX_MS = 30_000;
 export const PULSE_MAX_MS = 120_000;

@@ -8,6 +8,7 @@ import {
   PULSE_MAX_MS,
   PULSE_VISIBLE_MS,
   chatFailure,
+  conversationInterval,
   retryDelay,
   undeliveredLabel,
 } from "../src/features/agency/team-chat-model";
@@ -41,6 +42,12 @@ assert.deepEqual(
   [15_000, 30_000, 60_000, 120_000, 120_000],
 );
 assert.equal(retryDelay(3_000, 10_000, 30_000), 30_000, "huge failure counts don't overflow");
+
+// A quiet conversation is checked less often; an active one every 3 seconds.
+assert.deepEqual(
+  [0, 60_000, 119_999, 120_000, 599_999, 600_000, 3_600_000].map(conversationInterval),
+  [3_000, 3_000, 3_000, 6_000, 6_000, 10_000, 10_000],
+);
 
 // Only a refusal says "not sent"; no answer means it may have been saved.
 assert.equal(undeliveredLabel("offline"), "Delivery unconfirmed.");

@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   SESSION_ENDED_EVENT,
+  announceSessionEnded,
   checkSessionRecovery,
   type AgencySession,
   type SessionEndReason,
@@ -25,8 +26,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/** While a session check is waiting, look again this often (only while the tab is in view). */
-const RECOVERY_CHECK_MS = 10_000;
+import {
+  clockLabel,
+  nextPhaseCheck,
+  recoveryDelay,
+  sessionPhase,
+} from "./session-guard-model";
 
 const SessionLive = createContext(true);
 /**
@@ -81,29 +86,104 @@ export function SessionGuard({
     return () => window.removeEventListener(SESSION_ENDED_EVENT, announced);
   }, [setEnded]);
 
-  const check = useCallback(async () => {
-    if (document.visibilityState !== "visible") return;
+  // When this session ends, where that is known (hosted sign-in). Measured from when the
+  // answer arrived, on this browser's clock only, so a wrong clock can't skew it.
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [ending, setEnding] = useState(false);
+  const [warned, setWarned] = useState(false);
+  useEffect(() => {
+    setDeadline(
+      typeof session.sessionSecondsLeft === "number"
+        ? Date.now() + session.sessionSecondsLeft * 1000
+        : null,
+    );
+    setEnding(false);
+    setWarned(false);
+  }, [session]);
+
+  /** Returns true when the person is (still, or again) signed in as themselves. */
+  // One check at a time: a timer, a focus and a tab switch often land together.
+  const checking = useRef<Promise<boolean> | null>(null);
+  const checkNow = useCallback(async () => {
     const result = await checkSessionRecovery(actor.current);
-    if (result === "resume") {
-      setEnded(null);
-      setOpen(false);
-      resume.current();
-    } else if (result === "other_person" && endedNow.current) {
-      setEnded({ ...endedNow.current, otherPerson: true });
-      setOpen(true);
+    if (result.kind === "resume") {
+      if (result.secondsLeft !== undefined) setDeadline(Date.now() + result.secondsLeft * 1000);
+      setEnding(false);
+      setWarned(false);
+      if (endedNow.current) {
+        setEnded(null);
+        setOpen(false);
+        resume.current();
+      }
+      return true;
     }
+    if (result.kind === "other_person") {
+      setEnded({ reason: endedNow.current?.reason ?? "signed_out", otherPerson: true });
+      setOpen(true);
+    } else if (result.kind === "signed_out" && !endedNow.current) announceSessionEnded("signed_out");
+    return false;
   }, [setEnded]);
+  const check = useCallback(() => {
+    checking.current ??= checkNow().finally(() => {
+      checking.current = null;
+    });
+    return checking.current;
+  }, [checkNow]);
+
+  // Before the end: say when. At the end: confirm it and pause, without waiting for a
+  // request to be refused. Timers can run late (a sleeping laptop, a background tab),
+  // so coming back to the tab looks again.
+  const live = !ended;
+  useEffect(() => {
+    if (!live || deadline === null) return;
+    let timer: number | undefined;
+    let stopped = false;
+    const look = async () => {
+      window.clearTimeout(timer);
+      const left = deadline - Date.now();
+      const phase = sessionPhase(left);
+      setEnding(phase === "ending");
+      // check() moves the deadline or ends the session; either re-runs this effect.
+      if (phase === "due" && (await check())) return;
+      if (!stopped) timer = window.setTimeout(() => void look(), nextPhaseCheck(left));
+    };
+    const shown = () => {
+      if (document.visibilityState === "visible") void look();
+    };
+    void look();
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", shown);
+    };
+  }, [live, deadline, check]);
+
+  // While signed out: look for the person coming back, less often as time passes, and
+  // straight away when they return to this tab.
   const waiting = Boolean(ended) && !ended?.otherPerson;
   useEffect(() => {
     if (!waiting) return;
-    const timer = window.setInterval(() => void check(), RECOVERY_CHECK_MS);
-    const look = () => void check();
-    window.addEventListener("focus", look);
-    document.addEventListener("visibilitychange", look);
+    let timer: number | undefined;
+    let attempt = 0;
+    let stopped = false;
+    const look = async (returned = false) => {
+      window.clearTimeout(timer);
+      if (returned) attempt = 0;
+      if (document.visibilityState === "visible") await check();
+      if (!stopped) timer = window.setTimeout(() => void look(), recoveryDelay(attempt++));
+    };
+    const back = () => {
+      if (document.visibilityState === "visible") void look(true);
+    };
+    timer = window.setTimeout(() => void look(), recoveryDelay(attempt++));
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", look);
-      document.removeEventListener("visibilitychange", look);
+      stopped = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", back);
     };
   }, [waiting, check]);
 
@@ -141,6 +221,18 @@ export function SessionGuard({
   return (
     <SessionLive.Provider value={!ended}>
       {children}
+      {!ended && ending && !warned && deadline !== null && (
+        <div className="agency-session-banner" data-tone="notice" role="status">
+          <span>
+            {hosted
+              ? `You'll be asked to sign in again at ${clockLabel(deadline)}. Nothing in this tab will be lost.`
+              : `This session ends at ${clockLabel(deadline)}.`}
+          </span>
+          <button className="agency-access-link" onClick={() => setWarned(true)}>
+            OK
+          </button>
+        </div>
+      )}
       {ended && copy && (
         <>
           {!open && (

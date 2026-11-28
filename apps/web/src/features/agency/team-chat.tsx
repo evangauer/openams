@@ -25,6 +25,8 @@ import { useSessionLive } from "./session-guard";
 import {
   CONVERSATION_MAX_MS,
   CONVERSATION_POLL_MS,
+  CONVERSATION_QUIET_MS,
+  conversationInterval,
   PULSE_HIDDEN_MS,
   PULSE_MAX_MS,
   PULSE_VISIBLE_MS,
@@ -574,6 +576,15 @@ function Conversation({
   // Kept across pauses, so resuming asks only for what arrived meanwhile.
   const latest = useRef(0);
   const firstPage = useRef(true);
+  // The last sign of life here: a message arriving, typing or sending. A quiet
+  // conversation is checked less often; `wake` makes it quick again at once.
+  const activity = useRef(Date.now());
+  const wake = useRef<(() => void) | null>(null);
+  const stir = useCallback(() => {
+    const wasQuiet = Date.now() - activity.current >= CONVERSATION_QUIET_MS;
+    activity.current = Date.now();
+    if (wasQuiet) wake.current?.();
+  }, []);
   const [draft, setDraft] = useState(drafts[thread] ?? "");
   const log = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -620,8 +631,12 @@ function Conversation({
         failures = 0;
         const top = history.messages.at(-1)?.sequence;
         if (top) latest.current = Math.max(latest.current, top);
+        if (history.messages.length) activity.current = Date.now();
         merge(history.messages);
-        timer = window.setTimeout(() => void load(), CONVERSATION_POLL_MS);
+        timer = window.setTimeout(
+          () => void load(),
+          conversationInterval(Date.now() - activity.current),
+        );
       } catch (error) {
         if (!alive) return;
         const kind = chatFailure(error);
@@ -638,12 +653,16 @@ function Conversation({
     };
     // Coming back to the tab looks straight away instead of waiting for the next turn.
     const shown = () => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState !== "visible") return;
+      activity.current = Date.now();
+      void load();
     };
+    wake.current = () => void load();
     void load(true);
     document.addEventListener("visibilitychange", shown);
     return () => {
       alive = false;
+      wake.current = null;
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", shown);
     };
@@ -731,6 +750,7 @@ function Conversation({
     setDraft("");
     drafts[thread] = "";
     stick.current = true;
+    stir();
     setPending((list) => [...list, { id, body, failed: false }]);
     void deliver(id, body);
   }
@@ -888,6 +908,7 @@ function Conversation({
           onChange={(event) => {
             setDraft(event.target.value);
             drafts[thread] = event.target.value;
+            stir();
           }}
           onKeyDown={(event) => {
             if (

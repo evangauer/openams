@@ -488,6 +488,10 @@ html[data-theme="brand"] .agency-signout:hover {
   font-weight: 600;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
+.agency-session-banner[data-tone="notice"] {
+  background: #fbf3dc;
+  color: #5c4a14;
+}
 .agency-access-dialog-note {
   margin: 0;
   color: var(--color-muted, #3f434c);

@@ -20,6 +20,8 @@ export interface AgencySession {
   /** Hosted forms are available; publishing may still be off (the public demo). */
   formsEnabled?: boolean;
   formPublishingEnabled?: boolean;
+  /** Seconds until this sign-in session expires, where sessions do (hosted sign-in). */
+  sessionSecondsLeft?: number;
   /** Team chat and presence are available in this environment. */
   chatEnabled?: boolean;
   calendarConfigured?: boolean;
@@ -196,17 +198,30 @@ export function sameActor(
  * (not through request(), which would announce the ended session again).
  * "resume": the same person and agency, so this tab can carry on as it is.
  * "other_person": someone else is signed in now; nothing in this tab is theirs.
- * "waiting": still signed out, or the check couldn't tell.
+ * "signed_out": the session (or membership) is refused.
+ * "unknown": the check couldn't tell (offline, service unavailable); ask again later.
  */
-export type SessionRecovery = "resume" | "other_person" | "waiting";
+export type SessionRecovery =
+  | { kind: "resume"; secondsLeft?: number }
+  | { kind: "other_person" | "signed_out" | "unknown" };
 export async function checkSessionRecovery(
   actor: Pick<AmsActor, "userId" | "tenantId">,
 ): Promise<SessionRecovery> {
   const response = await fetch("/api/agency/session", { cache: "no-store" }).catch(() => null);
-  if (!response?.ok) return "waiting";
-  const next = (await response.json().catch(() => null)) as Partial<AgencySession> | null;
-  if (!next?.actor || typeof next.actor.userId !== "string") return "waiting";
-  return sameActor(actor, next.actor) ? "resume" : "other_person";
+  if (!response) return { kind: "unknown" };
+  const next = (await response.json().catch(() => null)) as
+    | (Partial<AgencySession> & { error?: string; code?: string })
+    | null;
+  if (!response.ok)
+    return {
+      kind: sessionEndReason(response.status, next?.error || next?.code || "") ? "signed_out" : "unknown",
+    };
+  if (!next?.actor || typeof next.actor.userId !== "string") return { kind: "unknown" };
+  if (!sameActor(actor, next.actor)) return { kind: "other_person" };
+  return {
+    kind: "resume",
+    ...(typeof next.sessionSecondsLeft === "number" ? { secondsLeft: next.sessionSecondsLeft } : {}),
+  };
 }
 /** Used when a refusal carries no message of its own; the API's messages take precedence. */
 const STATUS_MESSAGES: Record<number, string> = {
