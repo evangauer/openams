@@ -39,6 +39,8 @@ import { mountFormRoutes, type AmsFormsDependency } from "./form-routes.js";
 export interface AmsRouterDependencies {
   authenticate: RequestHandler;
   actor: (request: Request) => AmsActor;
+  /** Seconds until this request's sign-in session expires, where sessions do expire. */
+  sessionSecondsLeft?: (request: Request) => number | undefined;
   enabled: (tenantId: string) => Promise<boolean>;
   repository: () => AmsRepository;
   files: AmsFiles;
@@ -178,7 +180,8 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
   );
   router.get(
     "/ams/session",
-    handle(async (_request, response, actor) => {
+    handle(async (request, response, actor) => {
+      const sessionSecondsLeft = deps.sessionSecondsLeft?.(request);
       const setup = await deps
         .repository()
         .get(actor.tenantId, "workspace", "agency");
@@ -200,6 +203,7 @@ export function createAmsRouter(deps: AmsRouterDependencies): Router {
       ]);
       response.json({
         actor,
+        ...(sessionSecondsLeft === undefined ? {} : { sessionSecondsLeft }),
         members,
         workspaceName: setup?.data.name ?? workspaceName,
         timeZone: parseAms(AmsTimeZone, timeZone ?? "UTC"),

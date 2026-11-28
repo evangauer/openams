@@ -407,6 +407,66 @@ function refs(db: Firestore) {
 interface Identity {
   uid: string;
   email: string;
+  /** When the session cookie itself expires, in seconds since the epoch. */
+  expiresAt: number;
+}
+
+/**
+ * AMS_SESSION_CACHE_SECONDS: how long an instance may trust a session it has already
+ * verified, a whole number from 0 to 300. 0 or unset (the default) verifies every
+ * request. See SessionCache for what a longer time trades away.
+ */
+export function sessionCacheSecondsFromEnv(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.AMS_SESSION_CACHE_SECONDS?.trim();
+  if (!raw || !/^\d{1,3}$/.test(raw)) return 0;
+  return Math.min(300, Number(raw));
+}
+/**
+ * Optional, off by default. Without it, every /ams request checks the session with
+ * Firebase Auth (so a revoked session stops at once) and reads the membership (so a
+ * deactivated member or a changed role applies at once). With it, an instance trusts a
+ * session it verified for up to `seconds`, which removes that work from most requests.
+ *
+ * The cost: a revoked session, a deactivated member or a changed role can keep working
+ * for up to `seconds` on instances that had already seen that session. The instance that
+ * handles the sign-out, deactivation or role change forgets that person immediately.
+ * Entries never outlive the session cookie's own expiry. Only the SHA-256 of a cookie
+ * is kept, never the cookie.
+ */
+export class SessionCache {
+  private entries = new Map<string, { until: number; actor: AmsActor; expiresAt: number }>();
+  constructor(
+    private seconds: number,
+    private now: () => number = Date.now,
+  ) {}
+  get enabled() {
+    return this.seconds > 0;
+  }
+  private key(token: string) {
+    return createHash("sha256").update(token).digest("hex");
+  }
+  get(token: string) {
+    if (!this.enabled) return null;
+    const key = this.key(token);
+    const entry = this.entries.get(key);
+    if (!entry) return null;
+    if (entry.until <= this.now()) {
+      this.entries.delete(key);
+      return null;
+    }
+    return { actor: entry.actor, expiresAt: entry.expiresAt };
+  }
+  set(token: string, actor: AmsActor, expiresAt: number) {
+    if (!this.enabled) return;
+    const until = Math.min(this.now() + this.seconds * 1000, expiresAt * 1000);
+    if (until <= this.now()) return;
+    if (this.entries.size >= 50_000) this.entries.clear();
+    this.entries.set(this.key(token), { until, actor, expiresAt });
+  }
+  /** Drop every remembered session of one person (sign-out, deactivation, role change). */
+  forgetUser(uid: string) {
+    for (const [key, entry] of this.entries) if (entry.actor.userId === uid) this.entries.delete(key);
+  }
 }
 interface Membership {
   tenantId: string;
@@ -445,7 +505,7 @@ async function verifySession(auth: BaseAuth, request: Request, requireMfa = fals
   } catch (error) {
     throw error instanceof IdentityError ? new SessionRefused("phone_identity") : authFailure(error);
   }
-  return { uid: decoded.uid, email: normalizeEmail(decoded.email) };
+  return { uid: decoded.uid, email: normalizeEmail(decoded.email), expiresAt: decoded.exp };
 }
 async function loadMembership(
   db: Firestore,
@@ -471,10 +531,21 @@ export function createFirebaseAuthenticate(deps: {
   requireMfa?: boolean;
   /** Allow primary SMS sign-in for a verified-email account (default: AMS_SMS_SIGNIN). */
   allowSms?: boolean;
+  /** Trust verified sessions briefly instead of verifying every request (default: off). */
+  sessions?: SessionCache;
 }): RequestHandler {
   const requireMfa = deps.requireMfa ?? mfaRequiredFromEnv();
   const allowSms = (deps.allowSms ?? smsSigninFromEnv()) && !requireMfa;
   return async (request, response, next) => {
+    const remembered = deps.sessions?.enabled
+      ? deps.sessions.get(/^Bearer (.+)$/.exec(request.header("authorization") ?? "")?.[1] ?? "")
+      : null;
+    if (remembered) {
+      response.locals.amsActor = remembered.actor;
+      response.locals.amsSessionExpiresAt = remembered.expiresAt;
+      next();
+      return;
+    }
     let membership: Membership | null;
     let identity: Identity;
     try {
@@ -510,12 +581,15 @@ export function createFirebaseAuthenticate(deps: {
       });
       return;
     }
-    response.locals.amsActor = {
+    const actor = {
       userId: identity.uid,
       tenantId: membership.tenantId,
       name: membership.member.name,
       role: membership.member.role,
     } satisfies AmsActor;
+    response.locals.amsActor = actor;
+    response.locals.amsSessionExpiresAt = identity.expiresAt;
+    if (deps.sessions?.enabled) deps.sessions.set(bearer(request), actor, identity.expiresAt);
     next();
   };
 }
@@ -564,6 +638,8 @@ export function firestoreTimeZone(
 export interface IdentityRouterDependencies {
   auth: BaseAuth;
   db: Firestore;
+  /** The /ams session cache, told when a person's sessions or membership change. */
+  sessions?: SessionCache;
   appCheck?: AppCheck;
   now?: () => Date;
   limits?: Partial<IdentityLimits>;
@@ -945,6 +1021,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
     sessionThen,
     route(async (request, response) => {
       EmptyBody.parse(request.body ?? {});
+      deps.sessions?.forgetUser(response.locals.identity.uid);
       await deps.auth.revokeRefreshTokens(response.locals.identity.uid);
       response.json({ ok: true });
     }),
@@ -1732,6 +1809,7 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         audit(tx, tenantId, { actorUid: uid, action: "member.mfa_reset", targetUid });
       });
       await deps.auth.updateUser(targetUid, { multiFactor: { enrolledFactors: null } });
+      deps.sessions?.forgetUser(targetUid);
       const sessionsRevoked = await deps.auth
         .revokeRefreshTokens(targetUid)
         .then(() => true, () => false);
@@ -1811,6 +1889,8 @@ export function createIdentityRouter(deps: IdentityRouterDependencies): Router {
         });
         return { id: targetUid, ...next };
       });
+      // Role, deactivation and reactivation all change what this person's session means.
+      deps.sessions?.forgetUser(targetUid);
       let sessionsRevoked: boolean | undefined;
       if (action === "deactivate") {
         // Belt and braces: authenticate also refuses inactive members on every request.

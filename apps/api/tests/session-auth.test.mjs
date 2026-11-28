@@ -4,13 +4,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  SessionCache,
+  sessionCacheSecondsFromEnv,
   SessionRefused,
   createFirebaseAuthenticate,
   logSessionRefused,
 } from "../dist/firebase/identity.js";
 
 const cookie = "c".repeat(40);
-const decoded = { uid: "uid_casey", email: "casey@harbor-test.example", email_verified: true, firebase: { sign_in_provider: "password" } };
+const decoded = { exp: Math.floor(Date.now() / 1000) + 3600, uid: "uid_casey", email: "casey@harbor-test.example", email_verified: true, firebase: { sign_in_provider: "password" } };
 
 function authError(code) {
   return Object.assign(new Error("fixture"), { code });
@@ -48,7 +50,7 @@ async function call(authenticate, headers = { authorization: `Bearer ${cookie}` 
     },
   };
   await authenticate(request, response, () => (passed = true));
-  return { status, body, passed, actor: response.locals.amsActor };
+  return { status, body, passed, actor: response.locals.amsActor, expiresAt: response.locals.amsSessionExpiresAt };
 }
 function captureLogs(t) {
   const lines = [];
@@ -126,4 +128,70 @@ test("refusal logs are summarized per reason, once a minute", (t) => {
     ["error", "OpenAMS session check unavailable: fixture-reason-b."],
     ["warn", "OpenAMS session refused: fixture-reason-a (5 more since the last report)."],
   ]);
+});
+
+test("the session cache is off unless configured, and bounded", () => {
+  assert.equal(sessionCacheSecondsFromEnv({}), 0);
+  for (const bad of ["", "abc", "-5", "1.5", "1e3"]) assert.equal(sessionCacheSecondsFromEnv({ AMS_SESSION_CACHE_SECONDS: bad }), 0, bad);
+  assert.equal(sessionCacheSecondsFromEnv({ AMS_SESSION_CACHE_SECONDS: " 60 " }), 60);
+  assert.equal(sessionCacheSecondsFromEnv({ AMS_SESSION_CACHE_SECONDS: "999" }), 300);
+  const off = new SessionCache(0);
+  off.set(cookie, { userId: "u" }, 9e9);
+  assert.equal(off.get(cookie), null);
+});
+
+test("by default every request is verified and the membership read", async () => {
+  let verified = 0;
+  const authenticate = createFirebaseAuthenticate({ auth: fakeAuth(() => (verified++, decoded)), db: fakeDb(), requireMfa: false, allowSms: false, sessions: new SessionCache(0) });
+  for (let i = 0; i < 3; i++) assert.equal((await call(authenticate)).passed, true);
+  assert.equal(verified, 3);
+});
+
+test("a remembered session skips verification until it lapses, is forgotten, or the cookie expires", async () => {
+  let clock = 1_000_000_000_000;
+  const sessions = new SessionCache(60, () => clock);
+  let verified = 0;
+  let revoked = false;
+  const exp = clock / 1000 + 90;
+  const auth = fakeAuth(() => {
+    verified++;
+    if (revoked) throw authError("auth/session-cookie-revoked");
+    return { ...decoded, exp };
+  });
+  const authenticate = createFirebaseAuthenticate({ auth, db: fakeDb(), requireMfa: false, allowSms: false, sessions });
+  const first = await call(authenticate);
+  assert.equal(first.passed, true);
+  assert.equal(first.expiresAt, exp);
+  for (let i = 0; i < 5; i++) {
+    const again = await call(authenticate);
+    assert.deepEqual(again.actor, first.actor);
+    assert.equal(again.expiresAt, exp);
+  }
+  assert.equal(verified, 1);
+  // A different cookie is not the remembered one.
+  await call(authenticate, { authorization: `Bearer ${"d".repeat(40)}` });
+  assert.equal(verified, 2);
+  // Revoked elsewhere: still trusted here until the time is up, then refused.
+  revoked = true;
+  clock += 59_000;
+  assert.equal((await call(authenticate)).passed, true);
+  clock += 2_000;
+  assert.equal((await call(authenticate)).status, 401);
+  // Forgetting the person applies at once on this instance.
+  revoked = false;
+  assert.equal((await call(authenticate)).passed, true);
+  const before = verified;
+  sessions.forgetUser("uid_casey");
+  await call(authenticate);
+  assert.equal(verified, before + 1);
+  // Never trusted past the cookie's own expiry, however long the setting.
+  const long = new SessionCache(300, () => clock);
+  long.set(cookie, first.actor, clock / 1000 + 10);
+  assert.ok(long.get(cookie));
+  clock += 11_000;
+  assert.equal(long.get(cookie), null);
+  // A refused or member-less session is never remembered.
+  const refusing = new SessionCache(60);
+  await call(createFirebaseAuthenticate({ auth: fakeAuth(() => decoded), db: fakeDb({ member: null }), requireMfa: false, allowSms: false, sessions: refusing }));
+  assert.equal(refusing.get(cookie), null);
 });
